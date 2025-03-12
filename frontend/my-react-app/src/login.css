@@ -1,0 +1,59 @@
+body {
+    margin: 0;
+    font-family: "Poppins", sans-serif;
+    background: url("") no-repeat center center fixed;
+    background-size: cover;
+  }
+  
+  .login-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+  }
+  
+  .login-box {
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+    padding: 30px;
+    border-radius: 12px;
+    text-align: center;
+    width: 350px;
+    box-shadow: 0px 0px 15px rgba(0, 0, 0, 0.2);
+    animation: fadeIn 0.5s ease-in-out;
+  }
+  
+  h2 {
+    font-size: 45px;
+    color: #000000;
+    -webkit-text-stroke: 1px rgb(255, 255, 255);
+  }
+  
+  .tagline {
+    color: #000000;
+    font-size: 40px;
+    margin-bottom: 20px;
+    -webkit-text-stroke: 0.5px rgb(255, 255, 255);
+  }
+  
+  input {
+    width: 100%;
+    padding: 10px;
+    margin: 10px 0;
+    border-radius: 5px;
+    font-size: 16px;
+  }
+  
+  .switch-text {
+    color: #ffcc00;
+    cursor: pointer;
+    margin-top: 10px;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; transform: scale(0.9); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  .login-btn:hover{
+        background-color: rgb(100, 205, 76);
+  }

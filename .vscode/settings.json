@@ -1,0 +1,3 @@
+{
+    "llm-complete-me.baseURL": "https://api.openai.com/v1"
+}

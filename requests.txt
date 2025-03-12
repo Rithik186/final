@@ -1,0 +1,42 @@
+// Login request
+
+curl -X POST http://localhost:5000/api/user/login \
+-H "Content-Type: application/json" \
+-d '{
+  "email": "johndoe@example.com",
+  "password": "securepassword"
+}'
+
+//Register request
+
+curl -X POST http://localhost:5000/api/user/register \
+-H "Content-Type: application/json" \
+-d '{
+  "name": "John Doe",
+  "email": "johndoe@example.com",
+  "password": "secure_password"
+}'
+
+// Add product 
+
+  curl -X POST http://localhost:5000/api/add \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY3YmNhNjQzYzFmMmFlZWM2ZWZkYTFiYiIsInJvbGUiOiJmYXJtZXIiLCJpYXQiOjE3NDA0NTc1ODksImV4cCI6MTc0MTA2MjM4OX0.ih-d8AqzBnAKfX9_wd6O-PROSbDxri7mTdQu2H5ycb8" \
+  -d '{
+    "name": "Fresh Apples",
+    "description": "Organic apples from local farms",
+    "price": 100,
+    "stock": 50,
+    "category": "Fruits",
+    "image": "https://stock.adobe.com/search/images?k=apple"
+  }'
+
+
+`67bc2f846a86355c495d0486` - product id
+
+// Delete a product
+
+
+curl -X DELETE "http://localhost:5000/api/products/67c526352c0debaa2aea3ccc" \
+     -H "Content-Type: application/json" \
+     -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY3YmNhNjQzYzFmMmFlZWM2ZWZkYTFiYiIsInJvbGUiOiJmYXJtZXIiLCJpYXQiOjE3NDA0NTc1ODksImV4cCI6MTc0MTA2MjM4OX0.ih-d8AqzBnAKfX9_wd6O-PROSbDxri7mTdQu2H5ycb8"

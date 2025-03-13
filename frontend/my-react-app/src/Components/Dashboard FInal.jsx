@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
-import { auth } from "../firebase.js"; // Ensure this is correctly configured
-import { getDatabase, ref, onValue, get } from "firebase/database";
-import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from "chart.js";
+import { auth } from "../firebase.js";
+import { getDatabase, ref, get, remove } from "firebase/database";
+import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement } from "chart.js";
 import { Bar } from "react-chartjs-2";
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
-
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement);
 
 const translations = {
   "en-IN": {
@@ -22,7 +21,7 @@ const translations = {
     currentOrders: "Current Orders",
     totalEarnings: "Total Earnings",
     marketPrices: "Market Prices",
-    sellSurplus: "Sell Surplus Product",
+    viewMarketTrends: "View Market Trends",
     addProduct: "Add Product",
     cropRecommendation: "Crop Recommendation",
     ordersGraph: "Orders Graph",
@@ -39,13 +38,17 @@ const translations = {
     no: "No",
     next: "Next",
     finish: "Finish",
+    send: "Send",
+    cancel: "Cancel",
+    messagePlaceholder: "Type your message here...",
+    feedbackPlaceholder: "Type your feedback here...",
     guideConfirmed: "View your confirmed orders here.",
     guideCancelled: "See cancelled orders in this section.",
     guideDispatched: "Track dispatched orders here.",
     guideTotalEarnings: "Check your total earnings from all orders.",
     guideCurrentOrders: "Monitor your ongoing orders here.",
     guidePreviousOrders: "View your past completed orders.",
-    guideSellSurplus: "List your excess produce for sale here.",
+    guideSellSurplus: "View market trends here.", // Updated guide text
     guideCropRecommendation: "Get crop suggestions based on market trends.",
     guideFarmingNews: "Stay updated with the latest farming news.",
     guideOrdersGraph: "Analyze your order trends with this graph.",
@@ -68,7 +71,7 @@ const translations = {
     currentOrders: "தற்போதைய ஆர்டர்கள்",
     totalEarnings: "மொத்த வருவாய்",
     marketPrices: "சந்தை விலைகள்",
-    sellSurplus: "உபரி பொருளை விற்கவும்",
+    viewMarketTrends: "சந்தை போக்குகளைப் பார்",
     addProduct: "பொருளை சேர்",
     cropRecommendation: "பயிர் பரிந்துரை",
     ordersGraph: "ஆர்டர் வரைபடம்",
@@ -85,13 +88,17 @@ const translations = {
     no: "இல்லை",
     next: "அடுத்து",
     finish: "முடி",
+    send: "அனுப்பு",
+    cancel: "ரத்து",
+    messagePlaceholder: "உங்கள் செய்தியை இங்கே தட்டச்சு செய்யவும்...",
+    feedbackPlaceholder: "உங்கள் கருத்தை இங்கே தட்டச்சு செய்யவும்...",
     guideConfirmed: "இங்கே உங்கள் உறுதிப்படுத்தப்பட்ட ஆர்டர்களைப் பார்க்கவும்。",
     guideCancelled: "இந்த பகுதியில் ரத்து செய்யப்பட்ட ஆர்டர்களைப் பார்க்கவும்。",
     guideDispatched: "இங்கே அனுப்பப்பட்ட ஆர்டர்களைக் கண்காணிக்கவும்。",
     guideTotalEarnings: "அனைத்து ஆர்டர்களிலிருந்து உங்கள் மொத்த வருவாயை சரிபார்க்கவும்。",
     guideCurrentOrders: "இங்கே உங்கள் தற்போதைய ஆர்டர்களைக் கண்காணிக்கவும்。",
     guidePreviousOrders: "உங்கள் முந்தைய முடிந்த ஆர்டர்களைப் பார்க்கவும்。",
-    guideSellSurplus: "இங்கே உங்கள் உபரி பொருட்களை விற்பனைக்கு பட்டியலிடவும்。",
+    guideSellSurplus: "இங்கே சந்தை போக்குகளைப் பார்க்கவும்。",
     guideCropRecommendation: "சந்தை போக்குகளின் அடிப்படையில் பயிர் பரிந்துரைகளைப் பெறவும்。",
     guideFarmingNews: "சமீபத்திய விவசாய செய்திகளுடன் புதுப்பித்த நிலையில் இருக்கவும்。",
     guideOrdersGraph: "இந்த வரைபடத்துடன் உங்கள் ஆர்டர் போக்குகளை பகுப்பாய்வு செய்யவும்。",
@@ -114,7 +121,7 @@ const translations = {
     currentOrders: "वर्तमान ऑर्डर",
     totalEarnings: "कुल आय",
     marketPrices: "बाजार मूल्य",
-    sellSurplus: "अधिक उत्पाद बेचें",
+    viewMarketTrends: "बाजार रुझान देखें",
     addProduct: "उत्पाद जोड़ें",
     cropRecommendation: "फसल सिफारिश",
     ordersGraph: "ऑर्डर ग्राफ",
@@ -131,13 +138,17 @@ const translations = {
     no: "नहीं",
     next: "अगला",
     finish: "समाप्त",
+    send: "भेजें",
+    cancel: "रद्द करें",
+    messagePlaceholder: "अपना संदेश यहाँ टाइप करें...",
+    feedbackPlaceholder: "अपनी प्रतिक्रिया यहाँ टाइप करें...",
     guideConfirmed: "यहाँ अपने पुष्टि किए गए ऑर्डर देखें।",
     guideCancelled: "इस खंड में रद्द किए गए ऑर्डर देखें।",
     guideDispatched: "यहाँ भेजे गए ऑर्डर ट्रैक करें।",
     guideTotalEarnings: "सभी ऑर्डर से अपनी कुल आय जांचें।",
     guideCurrentOrders: "यहाँ अपने चल रहे ऑर्डर की निगरानी करें।",
     guidePreviousOrders: "अपने पिछले पूर्ण किए गए ऑर्डर देखें।",
-    guideSellSurplus: "यहाँ अपने अतिरिक्त उत्पाद को बिक्री के लिए सूचीबद्ध करें।",
+    guideSellSurplus: "यहाँ बाजार रुझान देखें।",
     guideCropRecommendation: "बाजार के रुझानों के आधार पर फसल सुझाव प्राप्त करें।",
     guideFarmingNews: "नवीनतम कृषि समाचारों के साथ अपडेट रहें।",
     guideOrdersGraph: "इस ग्राफ के साथ अपने ऑर्डर रुझानों का विश्लेषण करें।",
@@ -160,7 +171,7 @@ const translations = {
     currentOrders: "Current Orders",
     totalEarnings: "Total Earnings",
     marketPrices: "Market Prices",
-    sellSurplus: "Sell Surplus Product",
+    viewMarketTrends: "View Market Trends",
     addProduct: "Add Product",
     cropRecommendation: "Crop Recommendation",
     ordersGraph: "Orders Graph",
@@ -177,13 +188,17 @@ const translations = {
     no: "No",
     next: "Next",
     finish: "Finish",
+    send: "Send",
+    cancel: "Cancel",
+    messagePlaceholder: "Type your message here...",
+    feedbackPlaceholder: "Type your feedback here...",
     guideConfirmed: "View your confirmed orders here.",
     guideCancelled: "See canceled orders in this section.",
     guideDispatched: "Track dispatched orders here.",
     guideTotalEarnings: "Check your total earnings from all orders.",
     guideCurrentOrders: "Monitor your ongoing orders here.",
     guidePreviousOrders: "View your past completed orders.",
-    guideSellSurplus: "List your excess produce for sale here.",
+    guideSellSurplus: "View market trends here.",
     guideCropRecommendation: "Get crop suggestions based on market trends.",
     guideFarmingNews: "Stay updated with the latest farming news.",
     guideOrdersGraph: "Analyze your order trends with this graph.",
@@ -202,6 +217,7 @@ const audioFiles = {
   "hi-IN": "/Audio/Hindhi India.mp3",
   "en-US": "/Audio/English USA.mp3",
 };
+
 const getGuideSteps = (language) => {
   const durations = { "en-US": 46, "en-IN": 52, "hi-IN": 51, "ta-IN": 56 };
   const totalDuration = durations[language];
@@ -215,7 +231,7 @@ const getGuideSteps = (language) => {
     { id: "totalEarnings", target: ".total-earnings", start: stepDuration * 3, end: stepDuration * 4, textKey: "guideTotalEarnings" },
     { id: "currentOrders", target: ".current-orders", start: stepDuration * 4, end: stepDuration * 5, textKey: "guideCurrentOrders" },
     { id: "previousOrders", target: ".previous-orders", start: stepDuration * 5, end: stepDuration * 6, textKey: "guidePreviousOrders" },
-    { id: "sellSurplus", target: ".sell-surplus", start: stepDuration * 6, end: stepDuration * 7, textKey: "guideSellSurplus" },
+    { id: "viewMarketTrends", target: ".view-market-trends", start: stepDuration * 6, end: stepDuration * 7, textKey: "guideSellSurplus" },
     { id: "cropRecommendation", target: ".crop-recommendation", start: stepDuration * 7, end: stepDuration * 8, textKey: "guideCropRecommendation" },
     { id: "farmingNews", target: ".farming-news", start: stepDuration * 8, end: stepDuration * 9, textKey: "guideFarmingNews" },
     { id: "ordersGraph", target: ".orders-graph", start: stepDuration * 9, end: stepDuration * 10, textKey: "guideOrdersGraph" },
@@ -228,7 +244,6 @@ const getGuideSteps = (language) => {
   ];
 };
 
-
 const Dashboard = () => {
   const [darkMode, setDarkMode] = useState(false);
   const [products, setProducts] = useState([]);
@@ -237,38 +252,35 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [farmerName, setFarmerName] = useState("");
-  const [farmerId, setFarmerId] = useState("");
+  const [profilePic, setProfilePic] = useState("https://via.placeholder.com/150");
   const [showSettings, setShowSettings] = useState(false);
   const [language, setLanguage] = useState("en-IN");
   const [earnings, setEarnings] = useState(0);
   const [showGuide, setShowGuide] = useState(false);
   const [guideStep, setGuideStep] = useState(0);
-  const [userPhoto, setUserPhoto] = useState(null);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [showMessageModal, setShowMessageModal] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [message, setMessage] = useState("");
+  const [feedback, setFeedback] = useState("");
   const audioRef = useRef(null);
 
   const navigate = useNavigate();
   const db = getDatabase();
   const guideSteps = getGuideSteps(language);
 
-  const generateOrdersGraphData = (orders) => {
-    const monthlyData = Array(12).fill(0);
-    orders.forEach((order) => {
-      const orderDate = new Date(order.createdAt);
-      const month = orderDate.getMonth();
-      if (order.status === "Completed") {
-        monthlyData[month] += order.totalAmount;
-      }
-    });
-    return {
-      labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
-      datasets: [{
+  const ordersData = {
+    labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul"],
+    datasets: [
+      {
         label: translations[language].ordersGraph,
-        data: monthlyData,
+        data: [10, 20, 15, 30, 25, 40, 35],
         backgroundColor: "rgba(34, 197, 94, 0.6)",
         borderColor: "rgba(34, 197, 94, 1)",
         borderWidth: 1,
-      }],
-    };
+      },
+    ],
   };
 
   const chartOptions = {
@@ -285,180 +297,137 @@ const Dashboard = () => {
   };
 
   useEffect(() => {
-    console.log("useEffect triggered");
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
       if (!user) {
-        console.log("No user logged in, redirecting to login");
         setError("Please log in.");
         setLoading(false);
         navigate("/login");
         return;
       }
 
-      console.log("User logged in:", user.uid);
-      setFarmerId(user.uid);
-      setUserPhoto(user.photoURL || null);
       setLoading(true);
+      setError(null);
 
       try {
-        // Fetch farmer details
+        setProfilePic(user.photoURL || "https://via.placeholder.com/150");
+
         const userRef = ref(db, `users/${user.uid}`);
         const userSnapshot = await get(userRef);
         if (userSnapshot.exists()) {
           const userData = userSnapshot.val();
           setFarmerName(userData.name || user.displayName || "Farmer");
-          console.log("Farmer name set:", userData.name || user.displayName);
+          if (userData.photoURL) setProfilePic(userData.photoURL);
         } else {
-          console.log("No user data found, using default name");
           setFarmerName(user.displayName || "Farmer");
         }
 
-        // Fetch products
-        const productsRef = ref(db, `products/${user.uid}`);
-        onValue(productsRef, (snapshot) => {
-          const productsData = snapshot.val();
-          console.log("Products data:", productsData);
-          const farmerProducts = productsData 
-            ? Object.entries(productsData).map(([id, product]) => ({
-                id,
-                name: product.name,
-                price: product.price,
-                originalQuantity: product.quantity,
-                image: product.image || "https://via.placeholder.com/150",
-              }))
-            : [];
-          setProducts(farmerProducts);
-        }, (error) => {
-          console.error("Error fetching products:", error);
-          setError("Failed to fetch products.");
-        });
-
-        // Fetch orders
-        const ordersRef = ref(db, "customerOrders");
-        onValue(ordersRef, (snapshot) => {
-          const ordersData = snapshot.val();
-          console.log("Orders data:", ordersData);
-          if (ordersData) {
-            const farmerOrders = [];
-            const productQuantities = {};
-
-            Object.values(ordersData).forEach(customerOrders => {
-              Object.entries(customerOrders).forEach(([orderId, order]) => {
-                const farmerProducts = order.products?.filter(
-                  product => product.farmerId === user.uid
-                ) || [];
-                
-                if (farmerProducts.length > 0) {
-                  const orderTotalForFarmer = farmerProducts.reduce(
-                    (sum, product) => sum + (product.price * product.quantity), 
-                    0
-                  );
-                  
-                  farmerOrders.push({
-                    id: orderId,
-                    status: order.status,
-                    totalAmount: orderTotalForFarmer,
-                    createdAt: order.createdAt || Date.now(),
-                    products: farmerProducts,
-                  });
-
-                  farmerProducts.forEach(product => {
-                    productQuantities[product.productId] = 
-                      (productQuantities[product.productId] || 0) + product.quantity;
-                  });
-                }
-              });
-            });
-
-            console.log("Farmer orders:", farmerOrders);
-            setOrders(farmerOrders);
-
-            const updatedProducts = products.map(product => ({
-              ...product,
-              stock: product.originalQuantity - (productQuantities[product.id] || 0)
+        const productsRef = ref(db, "products");
+        const productsSnapshot = await get(productsRef);
+        if (productsSnapshot.exists()) {
+          const productsData = productsSnapshot.val();
+          const farmerProducts = Object.entries(productsData)
+            .filter(([_, product]) => product.farmerId === user.uid)
+            .map(([id, product]) => ({
+              id,
+              name: product.name,
+              price: product.price,
+              stock: product.quantity,
+              image: product.image || "https://via.placeholder.com/150",
             }));
-            setProducts(updatedProducts);
+          setProducts(farmerProducts);
+        }
 
-            const totalEarnings = farmerOrders
-              .filter(order => order.status === "Completed")
-              .reduce((sum, order) => sum + order.totalAmount, 0);
-            setEarnings(totalEarnings);
-            console.log("Total earnings:", totalEarnings);
-          } else {
-            console.log("No orders data found");
-            setOrders([]);
-          }
-        }, (error) => {
-          console.error("Error fetching orders:", error);
-          setError("Failed to fetch orders.");
-        });
+        const ordersRef = ref(db, "orders");
+        const ordersSnapshot = await get(ordersRef);
+        if (ordersSnapshot.exists()) {
+          const ordersData = ordersSnapshot.val();
+          const farmerOrders = Object.entries(ordersData)
+            .filter(([_, order]) => Object.values(order.products).some(p => p.farmerId === user.uid))
+            .map(([id, order]) => ({
+              id,
+              status: order.status,
+              totalAmount: order.totalAmount,
+            }));
+          setOrders(farmerOrders);
 
-        // Fetch weather
+          const totalEarnings = farmerOrders
+            .filter(order => order.status === "Completed")
+            .reduce((sum, order) => sum + order.totalAmount, 0);
+          setEarnings(totalEarnings);
+        }
+
         const fetchWeather = async (lat, lon) => {
-          try {
-            const apiKey = "ccd8b058961d7fefa87f1c29421d8bdf";
-            const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`;
-            const response = await fetch(url);
-            if (!response.ok) throw new Error(`Weather API error: ${response.status}`);
-            const data = await response.json();
-            setWeather({
-              main: { temp: data.main.temp, humidity: data.main.humidity },
-              weather: [{ description: data.weather[0].description, icon: data.weather[0].icon }],
-              name: data.name,
-              country: data.sys.country,
-              dt: data.dt,
-            });
-            console.log("Weather data:", data);
-          } catch (weatherError) {
-            console.error("Weather fetch error:", weatherError);
-            setWeather({
-              error: "Unable to fetch weather data",
-              main: { temp: 25, humidity: 50 },
-              weather: [{ description: "unknown" }],
-              name: "Unknown Location",
-              country: "N/A",
-            });
-          }
+          const apiKey = "ccd8b058961d7fefa87f1c29421d8bdf";
+          const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`;
+          const response = await fetch(url);
+          const data = await response.json();
+          setWeather({
+            main: { temp: data.main.temp, humidity: data.main.humidity },
+            weather: [{ description: data.weather[0].description }],
+            name: data.name,
+            country: data.sys.country,
+          });
         };
 
         if (navigator.geolocation) {
           navigator.geolocation.getCurrentPosition(
             (position) => fetchWeather(position.coords.latitude, position.coords.longitude),
-            (geoError) => {
-              console.error("Geolocation error:", geoError);
+            (err) => {
+              console.error("Geolocation error:", err);
               setWeather({
-                error: "Location access denied",
-                main: { temp: 25, humidity: 50 },
-                weather: [{ description: "unknown" }],
-                name: "Unknown Location",
-                country: "N/A",
+                main: { temp: 34.81, humidity: 24 },
+                weather: [{ description: "broken clouds" }],
+                name: "Sulur",
+                country: "IN",
               });
             }
           );
-        } else {
-          console.log("Geolocation not supported");
-          setWeather({
-            error: "Geolocation not supported",
-            main: { temp: 25, humidity: 50 },
-            weather: [{ description: "unknown" }],
-            name: "Unknown Location",
-            country: "N/A",
-          });
         }
       } catch (err) {
-        console.error("Dashboard error:", err);
-        setError("Failed to load dashboard data: " + err.message);
+        console.error("Fetch error:", err);
+        setError("Failed to load dashboard data.");
+        setProducts([]);
+        setOrders([]);
       } finally {
         setLoading(false);
-        console.log("Loading complete");
       }
     });
 
-    return () => {
-      console.log("Unsubscribing from auth state changes");
-      unsubscribe();
-    };
-  }, [navigate, db]);
+    return () => unsubscribe();
+  }, [navigate]);
+
+  useEffect(() => {
+    if (showGuide) {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
+      const audio = new Audio(audioFiles[language]);
+      audioRef.current = audio;
+      audio.currentTime = guideSteps[guideStep].start;
+      audio.play().catch((error) => console.error("Audio playback failed:", error));
+      const duration = (guideSteps[guideStep].end - guideSteps[guideStep].start) * 1000;
+      const timer = setTimeout(() => {
+        if (guideStep < guideSteps.length - 1) {
+          setGuideStep((prev) => prev + 1);
+        } else {
+          audio.pause();
+          setShowGuide(false);
+        }
+      }, duration);
+      return () => {
+        clearTimeout(timer);
+        if (audioRef.current) audioRef.current.pause();
+      };
+    }
+  }, [showGuide, guideStep, language]);
+
+  useEffect(() => {
+    if (showGuide) {
+      const targetElement = document.querySelector(guideSteps[guideStep].target);
+      if (targetElement) targetElement.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [guideStep, showGuide]);
 
   const getWeatherEmoji = (description) => {
     const weatherMap = {
@@ -471,7 +440,6 @@ const Dashboard = () => {
       "thunderstorm": "⛈️",
       "snow": "❄️",
       "mist": "🌫️",
-      "overcast clouds": "☁️",
     };
     return weatherMap[description?.toLowerCase()] || "🌤️";
   };
@@ -479,12 +447,48 @@ const Dashboard = () => {
   const handleLogout = async () => {
     try {
       await auth.signOut();
-      localStorage.clear();
+      localStorage.removeItem("token");
+      localStorage.removeItem("role");
+      localStorage.removeItem("userDetails");
       navigate("/login");
-      console.log("Logged out successfully");
-    } catch (error) {
-      console.error("Logout error:", error);
-      setError("Failed to log out: " + error.message);
+    } catch (err) {
+      console.error("Logout error:", err.message);
+      setError("Failed to log out.");
+    }
+  };
+
+  const withdrawProduct = async (productId) => {
+    try {
+      const productRef = ref(db, `products/${productId}`);
+      await remove(productRef);
+      setProducts(products.filter(product => product.id !== productId));
+      setShowWithdrawModal(false);
+      setSelectedProduct(null);
+      alert("Product withdrawn successfully!");
+    } catch (err) {
+      console.error("Error withdrawing product:", err);
+      setError("Failed to withdraw product.");
+    }
+  };
+
+  const handleWithdrawClick = (product) => {
+    setSelectedProduct(product);
+    setShowWithdrawModal(true);
+  };
+
+  const handleSendMessage = () => {
+    if (message.trim()) {
+      alert(`Message sent: ${message}`); // Simulate sending message
+      setMessage("");
+      setShowMessageModal(false);
+    }
+  };
+
+  const handleSubmitFeedback = () => {
+    if (feedback.trim()) {
+      alert(`Feedback submitted: ${feedback}`); // Simulate feedback submission
+      setFeedback("");
+      setShowFeedbackModal(false);
     }
   };
 
@@ -496,284 +500,371 @@ const Dashboard = () => {
 
   return (
     <motion.div
-      className={`min-h-screen p-6 font-sans ${darkMode ? "bg-gray-900 text-gray-100" : "bg-gradient-to-br from-gray-50 via-white to-gray-100 text-gray-800"}`}
+      className={`min-h-screen p-6 font-sans ${darkMode ? "bg-gray-900 text-gray-100" : "bg-gradient-to-br from-gray-50 via-white to-gray-100 text-gray-800"} ${showGuide ? "backdrop-blur-md" : ""}`}
       variants={pageVariants}
       initial="initial"
       animate="animate"
     >
-      <div className="container mx-auto">
-        {/* Header Section */}
-        <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-6">
-          <motion.div className="flex items-center gap-6">
-            <img 
-              src={userPhoto || "https://via.placeholder.com/80"} 
-              alt="Farmer Profile" 
-              className="w-20 h-20 rounded-full object-cover border-2 border-green-500"
-              onError={(e) => e.target.src = "https://via.placeholder.com/80"}
-            />
-            <div>
-              <h2 className="text-3xl font-bold text-green-600">
-                {translations[language].helloFarmer.replace("Farmer", farmerName)}
-              </h2>
-              <motion.button
-                className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium"
-                onClick={() => setShowSettings(!showSettings)}
-                whileHover={{ scale: 1.05 }}
-              >
-                {translations[language].settings}
-              </motion.button>
-              {showSettings && (
-                <motion.div
-                  className={`absolute mt-2 w-56 ${darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"} rounded-xl shadow-lg border p-4 z-10`}
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                >
-                  <button
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-                    onClick={() => setDarkMode(!darkMode)}
-                  >
-                    {darkMode ? translations[language].lightMode : translations[language].darkMode}
-                  </button>
-                  <select
-                    className="w-full text-left px-3 py-2 text-sm bg-transparent hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-                    value={language}
-                    onChange={(e) => setLanguage(e.target.value)}
-                  >
-                    <option value="en-IN">English (India)</option>
-                    <option value="ta-IN">தமிழ் (Tamil)</option>
-                    <option value="hi-IN">हिन्दी (Hindi)</option>
-                    <option value="en-US">English (US)</option>
-                  </select>
-                  <button className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg" onClick={handleLogout}>
-                    {translations[language].logout}
-                  </button>
-                </motion.div>
-              )}
-            </div>
-          </motion.div>
-
-          {/* Order Status Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full md:w-auto">
-            {["confirmed", "dispatched", "cancelled"].map((status) => (
+      <div className="flex flex-col lg:flex-row justify-between items-start mb-8 space-y-6 lg:space-y-0 lg:space-x-9">
+        <motion.div className="flex items-center space-x-6">
+          <img
+            src={profilePic}
+            alt="Farmer Profile"
+            className="w-20 h-20 rounded-full bg-gray-200 object-cover"
+            onError={(e) => (e.target.src = "https://via.placeholder.com/150")}
+          />
+          <div>
+            <h2 className="text-3xl font-bold text-green-600">{translations[language].helloFarmer.replace("Farmer", farmerName)}</h2>
+            <motion.button
+              className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium "
+              onClick={() => setShowSettings(!showSettings)}
+              whileHover={{ scale: 1.05 }}
+            >
+              {translations[language].settings}
+            </motion.button>
+            {showSettings && (
               <motion.div
-                key={status}
-                className={`p-6 rounded-xl shadow-lg border ${darkMode ? "bg-gray-800" : "bg-white"} ${status}`}
-                whileHover={glossyHover}
+                className={`absolute left-28 top-20 mt-2 w-56 ${darkMode ? "bg-gray-800 text-gray-200 border-gray-700" : "bg-white text-gray-800 border-gray-200"} rounded-xl shadow-lg border p-4 z-10`}
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
               >
-                <h3 className={`font-semibold text-xl ${status === "confirmed" ? "text-green-600" : status === "dispatched" ? "text-yellow-600" : "text-red-600"}`}>
-                  {translations[language][status]}
-                </h3>
-                {orders.filter(o => o.status.toLowerCase() === status).length === 0 ? (
-                  <p className="mt-3 text-base text-gray-500">No {status} orders</p>
-                ) : (
-                  orders.filter(o => o.status.toLowerCase() === status).slice(0, 2).map((order, idx) => (
-                    <p key={idx} className="mt-3 text-base text-gray-600">
-                      Order #{order.id} - ₹{order.totalAmount.toFixed(2)}
-                    </p>
-                  ))
-                )}
+                <button
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                  onClick={() => setDarkMode(!darkMode)}
+                >
+                  {darkMode ? translations[language].lightMode : translations[language].darkMode}
+                </button>
+                <select
+                  className="w-full text-left px-3 py-2 text-sm bg-transparent hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value)}
+                >
+                  <option value="en-IN" className="text-gray-800">English (India)</option>
+                  <option value="ta-IN" className="text-gray-800">தமிழ் (Tamil)</option>
+                  <option value="hi-IN" className="text-gray-800">हिन्दी (Hindi)</option>
+                  <option value="en-US" className="text-gray-800">English (US)</option>
+                </select>
+                <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
+                  {translations[language].help}
+                </button>
+                <button
+                  className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                  onClick={handleLogout}
+                >
+                  {translations[language].logout}
+                </button>
               </motion.div>
-            ))}
+            )}
           </div>
+        </motion.div>
 
-          {/* Weather Card */}
-          <motion.div
-            className={`p-6 rounded-xl shadow-lg border ${darkMode ? "bg-gray-800" : "bg-white"} w-full md:w-80 weather`}
-            whileHover={glossyHover}
-          >
-            <h3 className="font-semibold text-xl text-blue-600">{translations[language].weather}</h3>
-            {weather && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full lg:w-2/3">
+          {["confirmed", "dispatched", "cancelled"].map((status) => (
+            <motion.div
+              key={status}
+              className={`p-6 rounded-xl shadow-lg border ${status} ${darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-100"}`}
+              whileHover={glossyHover}
+            >
+              <h3 className={`font-semibold text-xl ${status === "confirmed" ? "text-green-600" : status === "dispatched" ? "text-yellow-600" : "text-red-600"}`}>
+                {translations[language][status]}
+              </h3>
+              {orders.filter(o => o.status.toLowerCase() === status).slice(0, 2).map((order, idx) => (
+                <p key={idx} className={`mt-3 text-base ${darkMode ? "text-gray-300" : "text-gray-700"}`}>Order #{order.id} - ₹{order.totalAmount}</p>
+              ))}
+            </motion.div>
+          ))}
+        </div>
+
+        <motion.div
+          className={`p-6 rounded-xl shadow-lg border weather ${darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-100"} w-full lg:w-80`}
+          whileHover={glossyHover}
+        >
+          <h3 className="font-semibold text-xl text-blue-600">{translations[language].weather}</h3>
+          {weather ? (
+            weather.error ? (
+              <p className={`mt-4 text-base ${darkMode ? "text-gray-300" : "text-gray-700"}`}>{weather.error}</p>
+            ) : (
               <div className="mt-4 text-center">
                 <span className="text-5xl">{getWeatherEmoji(weather.weather[0].description)}</span>
-                <p className="text-base font-medium mt-2 capitalize">{weather.weather[0].description}</p>
+                <p className={`text-base font-medium ${darkMode ? "text-gray-300" : "text-gray-700"} mt-2 capitalize`}>{weather.weather[0].description}</p>
                 <p className="text-3xl font-bold text-blue-600">{weather.main.temp}°C</p>
-                <p className="text-base mt-2">Humidity: {weather.main.humidity}%</p>
-                <p className="text-base">{weather.name}, {weather.country}</p>
+                <p className={`text-base ${darkMode ? "text-gray-300" : "text-gray-700"} mt-2`}>{weather.name}, {weather.country}</p>
+              </div>
+            )
+          ) : (
+            <p className={`mt-4 text-base ${darkMode ? "text-gray-300" : "text-gray-700"}`}>Fetching weather...</p>
+          )}
+        </motion.div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="lg:col-span-3 space-y-6">
+          <motion.div className={`p-6 rounded-xl shadow-lg border total-earnings ${darkMode ? "bg-gray-800" : "bg-white"}`} whileHover={glossyHover}>
+            <h3 className="font-semibold text-xl text-green-600">{translations[language].totalEarnings}</h3>
+            <p className={`mt-4 text-4xl font-bold ${darkMode ? "text-gray-100" : "text-gray-800"}`}>₹{earnings}</p>
+          </motion.div>
+
+          <motion.div className={`p-6 rounded-xl shadow-lg border current-orders ${darkMode ? "bg-gray-800" : "bg-white"}`} whileHover={glossyHover}>
+            <h3 className="font-semibold text-xl text-green-600">{translations[language].currentOrders}</h3>
+            {orders.filter(o => o.status === "Pending" || o.status === "Processing").slice(0, 2).map((order, idx) => (
+              <p key={idx} className={`mt-3 text-base ${darkMode ? "text-gray-300" : "text-gray-700"}`}>Order #{order.id} - ₹{order.totalAmount} ({order.status})</p>
+            ))}
+          </motion.div>
+
+          <motion.div className={`p-6 rounded-xl shadow-lg border previous-orders ${darkMode ? "bg-gray-800" : "bg-white"}`} whileHover={glossyHover}>
+            <h3 className="font-semibold text-xl text-yellow-600">{translations[language].previousOrders}</h3>
+            {orders.filter(o => o.status === "Completed").slice(0, 2).map((order, idx) => (
+              <p key={idx} className={`mt-3 text-base ${darkMode ? "text-gray-300" : "text-gray-700"}`}>Order #{order.id} - ₹{order.totalAmount}</p>
+            ))}
+          </motion.div>
+        </div>
+
+        <div className="lg:col-span-3 space-y-6">
+          <motion.div className={`p-6 rounded-xl shadow-lg border view-market-trends ${darkMode ? "bg-gray-800" : "bg-white"}`} whileHover={glossyHover}>
+            <h3 className="font-semibold text-xl text-blue-600">{translations[language].viewMarketTrends}</h3>
+            <Link to="/market-trends">
+              <motion.button
+                className="mt-4 px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 text-sm font-medium"
+                whileHover={{ scale: 1.05 }}
+              >
+                {translations[language].viewMarketTrends}
+              </motion.button>
+            </Link>
+          </motion.div>
+
+          <motion.div className={`p-6 rounded-xl shadow-lg border crop-recommendation ${darkMode ? "bg-gray-800" : "bg-white"}`} whileHover={glossyHover}>
+            <h3 className="font-semibold text-xl text-orange-600">{translations[language].cropRecommendation}</h3>
+            <p className={`mt-4 text-base ${darkMode ? "text-gray-300" : "text-gray-700"}`}>Recommended Crop: Onions</p>
+          </motion.div>
+
+          <motion.div className={`p-6 rounded-xl shadow-lg border farming-news ${darkMode ? "bg-gray-800" : "bg-white"}`} whileHover={glossyHover}>
+            <h3 className="font-semibold text-xl text-green-600">{translations[language].farmingNews}</h3>
+            <p className={`mt-4 text-base ${darkMode ? "text-gray-300" : "text-gray-700"}`}>Latest updates on farming techniques...</p>
+          </motion.div>
+        </div>
+
+        <div className="lg:col-span-3 space-y-6">
+          <motion.div className={`p-6 rounded-xl shadow-lg border orders-graph ${darkMode ? "bg-gray-800" : "bg-white"} h-96`} whileHover={glossyHover}>
+            <h3 className="font-semibold text-xl text-red-600">{translations[language].ordersGraph}</h3>
+            <div className="mt-4 h-72"><Bar data={ordersData} options={chartOptions} /></div>
+          </motion.div>
+
+          <motion.div className={`p-6 rounded-xl shadow-lg border your-products ${darkMode ? "bg-gray-800" : "bg-white"}`} whileHover={glossyHover}>
+            <h3 className="font-semibold text-xl text-teal-600">{translations[language].yourProducts}</h3>
+            {products.length === 0 ? (
+              <p className="mt-4 text-base text-gray-500">
+                No products available. <Link to="/addproducts" className="text-teal-600 font-medium">{translations[language].addProduct}</Link>
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 gap-4 mt-4">
+                {products.map((product) => (
+                  <motion.div key={product.id} whileHover={{ scale: 1.05 }} className="p-3 rounded-lg bg-teal-50">
+                    <img src={product.image} alt={product.name} className="w-20 h-20 object-cover rounded-lg mx-auto" />
+                    <p className="text-base font-medium mt-2">{product.name}</p>
+                    <p className="text-sm text-gray-600">₹{product.price}/kg</p>
+                    <p className="text-sm text-gray-500">{product.stock} kg available</p>
+                    <button
+                      className="mt-2 px-3 py-1 bg-orange-500 text-white rounded-lg text-sm hover:bg-orange-600"
+                      onClick={() => handleWithdrawClick(product)}
+                    >
+                      {translations[language].withdrawProduct}
+                    </button>
+                  </motion.div>
+                ))}
               </div>
             )}
           </motion.div>
         </div>
 
-        {/* Main Content Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {/* Left Column */}
-          <div className="space-y-6">
-            <motion.div className={`p-6 rounded-xl shadow-lg border ${darkMode ? "bg-gray-800" : "bg-white"} total-earnings`} whileHover={glossyHover}>
-              <h3 className="font-semibold text-xl text-green-600">{translations[language].totalEarnings}</h3>
-              <p className="mt-4 text-4xl font-bold">₹{earnings.toFixed(2)}</p>
-            </motion.div>
+        <div className="lg:col-span-3 space-y-6 flex flex-col items-center">
+          <motion.button
+            className="w-full py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 text-base font-medium new-message"
+            onClick={() => setShowMessageModal(true)}
+            whileHover={{ scale: 1.05 }}
+          >
+            {translations[language].newMessage}
+          </motion.button>
+          <motion.button
+            className="w-full py-3 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-lg hover:from-purple-600 hover:to-purple-700 text-base font-medium feedback"
+            onClick={() => setShowFeedbackModal(true)}
+            whileHover={{ scale: 1.05 }}
+          >
+            {translations[language].feedback}
+          </motion.button>
+          <Link to="/addproducts" className="w-full">
+            <motion.button
+              className="w-full py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 text-base font-medium add-product"
+              whileHover={{ scale: 1.05 }}
+            >
+              {translations[language].addProduct}
+            </motion.button>
+          </Link>
+        </div>
+      </div>
 
-            <motion.div className={`p-6 rounded-xl shadow-lg border ${darkMode ? "bg-gray-800" : "bg-white"} current-orders`} whileHover={glossyHover}>
-              <h3 className="font-semibold text-xl text-green-600">{translations[language].currentOrders}</h3>
-              {orders.filter(o => o.status === "Successful").length === 0 ? (
-                <p className="mt-3 text-base text-gray-500">No current orders</p>
-              ) : (
-                orders.filter(o => o.status === "Successful").slice(0, 2).map((order, idx) => (
-                  <p key={idx} className="mt-3 text-base text-gray-600">
-                    Order #{order.id} - ₹{order.totalAmount.toFixed(2)} ({order.status})
-                  </p>
-                ))
-              )}
-            </motion.div>
-
-            <motion.div className={`p-6 rounded-xl shadow-lg border ${darkMode ? "bg-gray-800" : "bg-white"} previous-orders`} whileHover={glossyHover}>
-              <h3 className="font-semibold text-xl text-yellow-600">{translations[language].previousOrders}</h3>
-              {orders.filter(o => o.status === "Completed").length === 0 ? (
-                <p className="mt-3 text-base text-gray-500">No previous orders</p>
-              ) : (
-                orders.filter(o => o.status === "Completed").slice(0, 2).map((order, idx) => (
-                  <p key={idx} className="mt-3 text-base text-gray-600">
-                    Order #{order.id} - ₹{order.totalAmount.toFixed(2)}
-                  </p>
-                ))
-              )}
-            </motion.div>
-          </div>
-
-          {/* Second Column */}
-          <div className="space-y-6">
-            <motion.div className={`p-6 rounded-xl shadow-lg border ${darkMode ? "bg-gray-800" : "bg-white"} sell-surplus`} whileHover={glossyHover}>
-              <h3 className="font-semibold text-xl text-blue-600">{translations[language].sellSurplus}</h3>
-              <motion.button
-                className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm font-medium"
-                whileHover={{ scale: 1.05 }}
+      {showWithdrawModal && (
+        <motion.div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+        >
+          <motion.div
+            className={`${darkMode ? "bg-gray-800 text-gray-200" : "bg-white text-gray-800"} p-6 rounded-xl shadow-lg`}
+            initial={{ scale: 0.8 }}
+            animate={{ scale: 1 }}
+          >
+            <h3 className="text-xl font-semibold mb-4">
+              {translations[language].withdrawProduct}: {selectedProduct?.name}
+            </h3>
+            <p className="mb-4">Are you sure you want to withdraw this product?</p>
+            <div className="flex space-x-4">
+              <button
+                className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                onClick={() => withdrawProduct(selectedProduct.id)}
               >
-                {translations[language].sellSurplus}
-              </motion.button>
-            </motion.div>
+                Yes
+              </button>
+              <button
+                className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
+                onClick={() => setShowWithdrawModal(false)}
+              >
+                No
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
 
-            <motion.div className={`p-6 rounded-xl shadow-lg border ${darkMode ? "bg-gray-800" : "bg-white"} crop-recommendation`} whileHover={glossyHover}>
-              <h3 className="font-semibold text-xl text-orange-600">{translations[language].cropRecommendation}</h3>
-              <p className="mt-4 text-base text-gray-600">Recommended Crop: Onions</p>
-            </motion.div>
+      {showMessageModal && (
+        <motion.div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+        >
+          <motion.div
+            className={`${darkMode ? "bg-gray-800 text-gray-200" : "bg-white text-gray-800"} p-6 rounded-xl shadow-lg w-96`}
+            initial={{ scale: 0.8 }}
+            animate={{ scale: 1 }}
+          >
+            <h3 className="text-xl font-semibold mb-4">{translations[language].newMessage}</h3>
+            <textarea
+              className={`w-full p-2 border rounded-lg ${darkMode ? "bg-gray-700 text-gray-200 border-gray-600" : "bg-white text-gray-800 border-gray-300"}`}
+              rows="4"
+              placeholder={translations[language].messagePlaceholder}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+            />
+            <div className="flex space-x-4 mt-4">
+              <button
+                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                onClick={handleSendMessage}
+              >
+                {translations[language].send}
+              </button>
+              <button
+                className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
+                onClick={() => setShowMessageModal(false)}
+              >
+                {translations[language].cancel}
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
 
-            <motion.div className={`p-6 rounded-xl shadow-lg border ${darkMode ? "bg-gray-800" : "bg-white"} farming-news`} whileHover={glossyHover}>
-              <h3 className="font-semibold text-xl text-green-600">{translations[language].farmingNews}</h3>
-              <p className="mt-4 text-base text-gray-600">Latest updates on farming techniques...</p>
-            </motion.div>
+      {showFeedbackModal && (
+        <motion.div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+        >
+          <motion.div
+            className={`${darkMode ? "bg-gray-800 text-gray-200" : "bg-white text-gray-800"} p-6 rounded-xl shadow-lg w-96`}
+            initial={{ scale: 0.8 }}
+            animate={{ scale: 1 }}
+          >
+            <h3 className="text-xl font-semibold mb-4">{translations[language].feedback}</h3>
+            <textarea
+              className={`w-full p-2 border rounded-lg ${darkMode ? "bg-gray-700 text-gray-200 border-gray-600" : "bg-white text-gray-800 border-gray-300"}`}
+              rows="4"
+              placeholder={translations[language].feedbackPlaceholder}
+              value={feedback}
+              onChange={(e) => setFeedback(e.target.value)}
+            />
+            <div className="flex space-x-4 mt-4">
+              <button
+                className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600"
+                onClick={handleSubmitFeedback}
+              >
+                {translations[language].send}
+              </button>
+              <button
+                className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
+                onClick={() => setShowFeedbackModal(false)}
+              >
+                {translations[language].cancel}
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+
+      {!showGuide && (
+        <motion.div className={`fixed bottom-6 right-6 p-4 ${darkMode ? "bg-gray-800 text-gray-200 border-gray-700" : "bg-white text-gray-800 border-gray-200"} rounded-xl shadow-lg border`}>
+          <p className="text-base font-medium">{translations[language].newToDashboard}</p>
+          <div className="flex space-x-3 mt-3">
+            <button className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm font-medium" onClick={() => setShowGuide(true)}>
+              {translations[language].yes}
+            </button>
+            <button className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-sm font-medium" onClick={() => setShowGuide(false)}>
+              {translations[language].no}
+            </button>
           </div>
+        </motion.div>
+      )}
 
-          {/* Third Column */}
-          <div className="space-y-6">
-            <motion.div className={`p-6 rounded-xl shadow-lg border ${darkMode ? "bg-gray-800" : "bg-white"} h-96 orders-graph`} whileHover={glossyHover}>
-              <h3 className="font-semibold text-xl text-red-600">{translations[language].ordersGraph}</h3>
-              <div className="mt-4 h-72">
-                <Bar data={generateOrdersGraphData(orders)} options={chartOptions} />
+      {showGuide && (
+        <motion.div className="fixed inset-0 z-20 pointer-events-none" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+          <div className="relative pointer-events-auto">
+            <motion.div
+              className={`absolute p-4 ${darkMode ? "bg-gray-800 text-gray-200 border-gray-700" : "bg-white text-gray-800 border-gray-200"} rounded-xl shadow-lg border z-40`}
+              style={{ top: (document.querySelector(guideSteps[guideStep].target)?.getBoundingClientRect().top || 0) - 140 + window.scrollY, left: "50%", transform: "translateX(-50%)", width: "320px" }}
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+            >
+              <p className="text-base mb-3">{translations[language][guideSteps[guideStep].textKey]}</p>
+              <div className="flex space-x-3">
+                <button
+                  className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm font-medium"
+                  onClick={() => guideStep < guideSteps.length - 1 ? setGuideStep(prev => prev + 1) : setShowGuide(false)}
+                >
+                  {guideStep < guideSteps.length - 1 ? translations[language].next : translations[language].finish}
+                </button>
+                {guideStep > 0 && (
+                  <button className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-sm font-medium" onClick={() => setGuideStep(prev => prev - 1)}>
+                    Back
+                  </button>
+                )}
+                <button className="px-4 py-2 bg-red-5 00 text-white rounded-lg hover:bg-red-600 text-sm font-medium" onClick={() => setShowGuide(false)}>
+                  Close
+                </button>
               </div>
             </motion.div>
-
-            <motion.div className={`p-6 rounded-xl shadow-lg border ${darkMode ? "bg-gray-800" : "bg-white"} your-products`} whileHover={glossyHover}>
-              <h3 className="font-semibold text-xl text-teal-600">{translations[language].yourProducts}</h3>
-              {products.length === 0 ? (
-                <p className="mt-4 text-base text-gray-500">
-                  No products available. <Link to="/addproducts" className="text-teal-600">{translations[language].addProduct}</Link>
-                </p>
-              ) : (
-                <div className="grid grid-cols-2 gap-4 mt-4">
-                  {products.map((product) => (
-                    <motion.div key={product.id} whileHover={{ scale: 1.05 }} className="p-3 rounded-lg bg-teal-50">
-                      <img src={product.image} alt={product.name} className="w-20 h-20 object-cover rounded-lg mx-auto" />
-                      <p className="text-base font-medium mt-2">{product.name}</p>
-                      <p className="text-sm text-gray-600">₹{product.price}/kg</p>
-                      <p className="text-sm text-gray-500">{product.stock} kg available</p>
-                    </motion.div>
-                  ))}
-                </div>
-              )}
-            </motion.div>
+            <motion.div
+              className="absolute border-4 border-green-500 rounded-lg shadow-lg pointer-events-none z-20"
+              style={{
+                top: (document.querySelector(guideSteps[guideStep].target)?.getBoundingClientRect().top || 0) - 8 + window.scrollY,
+                left: (document.querySelector(guideSteps[guideStep].target)?.getBoundingClientRect().left || 0) - 8,
+                width: (document.querySelector(guideSteps[guideStep].target)?.offsetWidth || 0) + 16,
+                height: (document.querySelector(guideSteps[guideStep].target)?.offsetHeight || 0) + 16,
+              }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+            />
           </div>
-
-          {/* Right Column */}
-          <div className="space-y-6">
-            <motion.button
-              className="w-full py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-base font-medium new-message"
-              onClick={() => alert(translations[language].newMessage)}
-              whileHover={{ scale: 1.05 }}
-            >
-              {translations[language].newMessage}
-            </motion.button>
-            <motion.button
-              className="w-full py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 text-base font-medium feedback"
-              onClick={() => alert(translations[language].feedback)}
-              whileHover={{ scale: 1.05 }}
-            >
-              {translations[language].feedback}
-            </motion.button>
-            <motion.button
-              className="w-full py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 text-base font-medium withdraw-product"
-              onClick={() => alert(translations[language].withdrawProduct)}
-              whileHover={{ scale: 1.05 }}
-            >
-              {translations[language].withdrawProduct}
-            </motion.button>
-            <Link to="/addproducts" className="w-full block">
-              <motion.button
-                className="w-full py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 text-base font-medium add-product"
-                whileHover={{ scale: 1.05 }}
-              >
-                {translations[language].addProduct}
-              </motion.button>
-            </Link>
-          </div>
-        </div>
-
-        {/* Guide Popup */}
-        {!showGuide && (
-          <motion.div className={`fixed bottom-6 right-6 p-4 ${darkMode ? "bg-gray-800" : "bg-white"} rounded-xl shadow-lg border`}>
-            <p className="text-base font-medium">{translations[language].newToDashboard}</p>
-            <div className="flex space-x-3 mt-3">
-              <button className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600" onClick={() => setShowGuide(true)}>
-                {translations[language].yes}
-              </button>
-              <button className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600" onClick={() => setShowGuide(false)}>
-                {translations[language].no}
-              </button>
-            </div>
-          </motion.div>
-        )}
-
-        {showGuide && (
-          <motion.div className="fixed inset-0 z-20 pointer-events-none" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <div className="relative pointer-events-auto">
-              <motion.div
-                className={`absolute p-4 ${darkMode ? "bg-gray-800 text-gray-200" : "bg-white text-gray-800"} rounded-xl shadow-lg border z-40`}
-                style={{ top: (document.querySelector(guideSteps[guideStep].target)?.getBoundingClientRect().top || 0) - 140 + window.scrollY, left: "50%", transform: "translateX(-50%)", width: "320px" }}
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-              >
-                <p className="text-base mb-3">{translations[language][guideSteps[guideStep].textKey]}</p>
-                <div className="flex space-x-3">
-                  <button
-                    className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm font-medium"
-                    onClick={() => guideStep < guideSteps.length - 1 ? setGuideStep((prev) => prev + 1) : setShowGuide(false)}
-                  >
-                    {guideStep < guideSteps.length - 1 ? translations[language].next : translations[language].finish}
-                  </button>
-                  {guideStep > 0 && (
-                    <button className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-sm font-medium" onClick={() => setGuideStep((prev) => prev - 1)}>
-                      Back
-                    </button>
-                  )}
-                  <button className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 text-sm font-medium" onClick={() => setShowGuide(false)}>
-                    Close
-                  </button>
-                </div>
-              </motion.div>
-              <motion.div
-                className="absolute border-4 border-green-500 rounded-lg shadow-lg pointer-events-none z-20"
-                style={{
-                  top: (document.querySelector(guideSteps[guideStep].target)?.getBoundingClientRect().top || 0) - 8 + window.scrollY,
-                  left: (document.querySelector(guideSteps[guideStep].target)?.getBoundingClientRect().left || 0) - 8,
-                  width: (document.querySelector(guideSteps[guideStep].target)?.offsetWidth || 0) + 16,
-                  height: (document.querySelector(guideSteps[guideStep].target)?.offsetHeight || 0) + 16,
-                }}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-              />
-            </div>
-          </motion.div>
-        )}
-      </div>
+        </motion.div>
+      )}
     </motion.div>
   );
 };

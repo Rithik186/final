@@ -2,12 +2,13 @@ import React, { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import { auth } from "../firebase.js";
-import { getDatabase, ref, get, remove } from "firebase/database";
+import { getDatabase, ref, onValue, remove } from "firebase/database";
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement } from "chart.js";
 import { Bar } from "react-chartjs-2";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement);
 
+// Define translations object
 const translations = {
   "en-IN": {
     helloFarmer: "Hello, Farmer!",
@@ -48,7 +49,7 @@ const translations = {
     guideTotalEarnings: "Check your total earnings from all orders.",
     guideCurrentOrders: "Monitor your ongoing orders here.",
     guidePreviousOrders: "View your past completed orders.",
-    guideSellSurplus: "View market trends here.", // Updated guide text
+    guideSellSurplus: "View market trends here.",
     guideCropRecommendation: "Get crop suggestions based on market trends.",
     guideFarmingNews: "Stay updated with the latest farming news.",
     guideOrdersGraph: "Analyze your order trends with this graph.",
@@ -220,7 +221,7 @@ const audioFiles = {
 
 const getGuideSteps = (language) => {
   const durations = { "en-US": 46, "en-IN": 52, "hi-IN": 51, "ta-IN": 56 };
-  const totalDuration = durations[language];
+  const totalDuration = durations[language] || 52; // Default to 52 if language not found
   const stepCount = 16;
   const stepDuration = totalDuration / stepCount;
 
@@ -244,6 +245,27 @@ const getGuideSteps = (language) => {
   ];
 };
 
+// Error Boundary Component
+class ErrorBoundary extends React.Component {
+  state = { hasError: false, error: null };
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center text-red-600">
+          <h1>Something went wrong.</h1>
+          <p>{this.state.error?.message || "Unknown error"}</p>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const Dashboard = () => {
   const [darkMode, setDarkMode] = useState(false);
   const [products, setProducts] = useState([]);
@@ -252,6 +274,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [farmerName, setFarmerName] = useState("");
+  const [farmerId, setFarmerId] = useState("");
   const [profilePic, setProfilePic] = useState("https://via.placeholder.com/150");
   const [showSettings, setShowSettings] = useState(false);
   const [language, setLanguage] = useState("en-IN");
@@ -270,12 +293,150 @@ const Dashboard = () => {
   const db = getDatabase();
   const guideSteps = getGuideSteps(language);
 
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      if (!user) {
+        setError("Please log in.");
+        setLoading(false);
+        navigate("/login");
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+      setFarmerId(user.uid);
+
+      const userRef = ref(db, `users/${user.uid}`);
+      onValue(
+        userRef,
+        (snapshot) => {
+          if (snapshot.exists()) {
+            const userData = snapshot.val();
+            setFarmerName(userData.name || user.displayName || "Farmer");
+            setProfilePic(userData.photoURL || user.photoURL || "https://via.placeholder.com/150");
+          } else {
+            setFarmerName(user.displayName || "Farmer");
+            setProfilePic(user.photoURL || "https://via.placeholder.com/150");
+          }
+        },
+        (err) => {
+          console.error("User fetch error:", err);
+          setError("Failed to fetch user data.");
+        }
+      );
+
+      const productsRef = ref(db, "products");
+      onValue(
+        productsRef,
+        (snapshot) => {
+          if (snapshot.exists()) {
+            const productsData = snapshot.val();
+            const farmerProducts = Object.entries(productsData)
+              .filter(([_, product]) => product.farmerId === `farmer_${user.uid}`)
+              .map(([id, product]) => ({
+                id,
+                name: product.name,
+                price: product.price,
+                stock: product.quantity,
+                image: product.image || "https://via.placeholder.com/150",
+              }));
+            setProducts(farmerProducts);
+          } else {
+            setProducts([]);
+          }
+        },
+        (err) => {
+          console.error("Products fetch error:", err);
+          setError("Failed to fetch products.");
+        }
+      );
+
+      const ordersRef = ref(db, "orders");
+      onValue(
+        ordersRef,
+        (snapshot) => {
+          if (snapshot.exists()) {
+            const ordersData = snapshot.val();
+            const farmerOrders = Object.entries(ordersData)
+              .filter(([_, order]) => order.products.some((p) => p.farmerId === `farmer_${user.uid}`))
+              .map(([id, order]) => {
+                const farmerProducts = order.products.filter((p) => p.farmerId === `farmer_${user.uid}`);
+                const farmerTotal = farmerProducts.reduce((sum, p) => sum + p.totalPrice, 0);
+                return {
+                  id: order.orderId || id,
+                  status: order.status,
+                  totalAmount: farmerTotal,
+                  date: order.orderDateTime,
+                  products: farmerProducts,
+                  customerName: order.customerName,
+                };
+              });
+            console.log("Fetched farmer orders:", farmerOrders);
+            setOrders(farmerOrders);
+
+            const totalEarnings = farmerOrders
+              .filter((order) => order.status === "Completed")
+              .reduce((sum, order) => sum + order.totalAmount, 0);
+            setEarnings(totalEarnings);
+          } else {
+            setOrders([]);
+            setEarnings(0);
+          }
+          setLoading(false);
+        },
+        (err) => {
+          console.error("Orders fetch error:", err);
+          setError("Failed to fetch orders.");
+          setLoading(false);
+        }
+      );
+
+      const fetchWeather = async (lat, lon) => {
+        const apiKey = "ccd8b058961d7fefa87f1c29421d8bdf";
+        const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`;
+        const response = await fetch(url);
+        const data = await response.json();
+        setWeather({
+          main: { temp: data.main.temp, humidity: data.main.humidity },
+          weather: [{ description: data.weather[0].description }],
+          name: data.name,
+          country: data.sys.country,
+        });
+      };
+
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => fetchWeather(position.coords.latitude, position.coords.longitude),
+          (err) => {
+            console.error("Geolocation error:", err);
+            setWeather({
+              main: { temp: 34.81, humidity: 24 },
+              weather: [{ description: "broken clouds" }],
+              name: "Sulur",
+              country: "IN",
+            });
+          }
+        );
+      }
+    });
+
+    return () => unsubscribe();
+  }, [navigate, db]);
+
+  const ordersByMonth = orders.reduce((acc, order) => {
+    if (order.status === "Completed" && order.date) {
+      const month = new Date(order.date).toLocaleString("default", { month: "short" });
+      acc[month] = (acc[month] || 0) + order.totalAmount;
+    }
+    return acc;
+  }, {});
+
   const ordersData = {
-    labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul"],
+    labels: Object.keys(ordersByMonth).length ? Object.keys(ordersByMonth) : ["No Data"],
     datasets: [
       {
-        label: translations[language].ordersGraph,
-        data: [10, 20, 15, 30, 25, 40, 35],
+        label: translations[language]?.ordersGraph || "Orders Graph", // Fallback
+        data: Object.keys(ordersByMonth).length ? Object.values(ordersByMonth) : [0],
         backgroundColor: "rgba(34, 197, 94, 0.6)",
         borderColor: "rgba(34, 197, 94, 1)",
         borderWidth: 1,
@@ -288,113 +449,18 @@ const Dashboard = () => {
     maintainAspectRatio: false,
     plugins: {
       legend: { position: "top", labels: { color: darkMode ? "#e5e7eb" : "#000000", font: { size: 10 } } },
-      title: { display: true, text: translations[language].ordersGraph, color: darkMode ? "#e5e7eb" : "#000000", font: { size: 14 } },
+      title: {
+        display: true,
+        text: translations[language]?.ordersGraph || "Orders Graph", // Fallback
+        color: darkMode ? "#e5e7eb" : "#000000",
+        font: { size: 14 },
+      },
     },
     scales: {
       x: { ticks: { color: darkMode ? "#e5e7eb" : "#000000", font: { size: 8 } } },
       y: { ticks: { color: darkMode ? "#e5e7eb" : "#000000", font: { size: 8 } } },
     },
   };
-
-  useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(async (user) => {
-      if (!user) {
-        setError("Please log in.");
-        setLoading(false);
-        navigate("/login");
-        return;
-      }
-
-      setLoading(true);
-      setError(null);
-
-      try {
-        setProfilePic(user.photoURL || "https://via.placeholder.com/150");
-
-        const userRef = ref(db, `users/${user.uid}`);
-        const userSnapshot = await get(userRef);
-        if (userSnapshot.exists()) {
-          const userData = userSnapshot.val();
-          setFarmerName(userData.name || user.displayName || "Farmer");
-          if (userData.photoURL) setProfilePic(userData.photoURL);
-        } else {
-          setFarmerName(user.displayName || "Farmer");
-        }
-
-        const productsRef = ref(db, "products");
-        const productsSnapshot = await get(productsRef);
-        if (productsSnapshot.exists()) {
-          const productsData = productsSnapshot.val();
-          const farmerProducts = Object.entries(productsData)
-            .filter(([_, product]) => product.farmerId === user.uid)
-            .map(([id, product]) => ({
-              id,
-              name: product.name,
-              price: product.price,
-              stock: product.quantity,
-              image: product.image || "https://via.placeholder.com/150",
-            }));
-          setProducts(farmerProducts);
-        }
-
-        const ordersRef = ref(db, "orders");
-        const ordersSnapshot = await get(ordersRef);
-        if (ordersSnapshot.exists()) {
-          const ordersData = ordersSnapshot.val();
-          const farmerOrders = Object.entries(ordersData)
-            .filter(([_, order]) => Object.values(order.products).some(p => p.farmerId === user.uid))
-            .map(([id, order]) => ({
-              id,
-              status: order.status,
-              totalAmount: order.totalAmount,
-            }));
-          setOrders(farmerOrders);
-
-          const totalEarnings = farmerOrders
-            .filter(order => order.status === "Completed")
-            .reduce((sum, order) => sum + order.totalAmount, 0);
-          setEarnings(totalEarnings);
-        }
-
-        const fetchWeather = async (lat, lon) => {
-          const apiKey = "ccd8b058961d7fefa87f1c29421d8bdf";
-          const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`;
-          const response = await fetch(url);
-          const data = await response.json();
-          setWeather({
-            main: { temp: data.main.temp, humidity: data.main.humidity },
-            weather: [{ description: data.weather[0].description }],
-            name: data.name,
-            country: data.sys.country,
-          });
-        };
-
-        if (navigator.geolocation) {
-          navigator.geolocation.getCurrentPosition(
-            (position) => fetchWeather(position.coords.latitude, position.coords.longitude),
-            (err) => {
-              console.error("Geolocation error:", err);
-              setWeather({
-                main: { temp: 34.81, humidity: 24 },
-                weather: [{ description: "broken clouds" }],
-                name: "Sulur",
-                country: "IN",
-              });
-            }
-          );
-        }
-      } catch (err) {
-        console.error("Fetch error:", err);
-        setError("Failed to load dashboard data.");
-        setProducts([]);
-        setOrders([]);
-      } finally {
-        setLoading(false);
-      }
-    });
-
-    return () => unsubscribe();
-  }, [navigate]);
 
   useEffect(() => {
     if (showGuide) {
@@ -461,7 +527,7 @@ const Dashboard = () => {
     try {
       const productRef = ref(db, `products/${productId}`);
       await remove(productRef);
-      setProducts(products.filter(product => product.id !== productId));
+      setProducts(products.filter((product) => product.id !== productId));
       setShowWithdrawModal(false);
       setSelectedProduct(null);
       alert("Product withdrawn successfully!");
@@ -478,7 +544,7 @@ const Dashboard = () => {
 
   const handleSendMessage = () => {
     if (message.trim()) {
-      alert(`Message sent: ${message}`); // Simulate sending message
+      alert(`Message sent: ${message}`);
       setMessage("");
       setShowMessageModal(false);
     }
@@ -486,7 +552,7 @@ const Dashboard = () => {
 
   const handleSubmitFeedback = () => {
     if (feedback.trim()) {
-      alert(`Feedback submitted: ${feedback}`); // Simulate feedback submission
+      alert(`Feedback submitted: ${feedback}`);
       setFeedback("");
       setShowFeedbackModal(false);
     }
@@ -516,7 +582,7 @@ const Dashboard = () => {
           <div>
             <h2 className="text-3xl font-bold text-green-600">{translations[language].helloFarmer.replace("Farmer", farmerName)}</h2>
             <motion.button
-              className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium "
+              className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium"
               onClick={() => setShowSettings(!showSettings)}
               whileHover={{ scale: 1.05 }}
             >
@@ -569,9 +635,14 @@ const Dashboard = () => {
               <h3 className={`font-semibold text-xl ${status === "confirmed" ? "text-green-600" : status === "dispatched" ? "text-yellow-600" : "text-red-600"}`}>
                 {translations[language][status]}
               </h3>
-              {orders.filter(o => o.status.toLowerCase() === status).slice(0, 2).map((order, idx) => (
-                <p key={idx} className={`mt-3 text-base ${darkMode ? "text-gray-300" : "text-gray-700"}`}>Order #{order.id} - ₹{order.totalAmount}</p>
+              {orders.filter((o) => o.status.toLowerCase() === status).slice(0, 2).map((order, idx) => (
+                <p key={idx} className={`mt-3 text-base ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
+                  Order #{order.id.split("_")[2]} - ₹{order.totalAmount} (To: {order.customerName})
+                </p>
               ))}
+              {orders.filter((o) => o.status.toLowerCase() === status).length === 0 && (
+                <p className={`mt-3 text-base ${darkMode ? "text-gray-300" : "text-gray-700"}`}>No {status} orders</p>
+              )}
             </motion.div>
           ))}
         </div>
@@ -602,21 +673,31 @@ const Dashboard = () => {
         <div className="lg:col-span-3 space-y-6">
           <motion.div className={`p-6 rounded-xl shadow-lg border total-earnings ${darkMode ? "bg-gray-800" : "bg-white"}`} whileHover={glossyHover}>
             <h3 className="font-semibold text-xl text-green-600">{translations[language].totalEarnings}</h3>
-            <p className={`mt-4 text-4xl font-bold ${darkMode ? "text-gray-100" : "text-gray-800"}`}>₹{earnings}</p>
+            <p className={`mt-4 text-4xl font-bold ${darkMode ? "text-gray-100" : "text-gray-800"}`}>₹{earnings.toFixed(2)}</p>
           </motion.div>
 
           <motion.div className={`p-6 rounded-xl shadow-lg border current-orders ${darkMode ? "bg-gray-800" : "bg-white"}`} whileHover={glossyHover}>
             <h3 className="font-semibold text-xl text-green-600">{translations[language].currentOrders}</h3>
-            {orders.filter(o => o.status === "Pending" || o.status === "Processing").slice(0, 2).map((order, idx) => (
-              <p key={idx} className={`mt-3 text-base ${darkMode ? "text-gray-300" : "text-gray-700"}`}>Order #{order.id} - ₹{order.totalAmount} ({order.status})</p>
+            {orders.filter((o) => ["Pending", "Confirmed", "Processing", "Dispatched"].includes(o.status)).slice(0, 2).map((order, idx) => (
+              <p key={idx} className={`mt-3 text-base ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
+                Order #{order.id.split("_")[2]} - ₹{order.totalAmount} ({order.status})
+              </p>
             ))}
+            {orders.filter((o) => ["Pending", "Confirmed", "Processing", "Dispatched"].includes(o.status)).length === 0 && (
+              <p className={`mt-3 text-base ${darkMode ? "text-gray-300" : "text-gray-700"}`}>No current orders</p>
+            )}
           </motion.div>
 
           <motion.div className={`p-6 rounded-xl shadow-lg border previous-orders ${darkMode ? "bg-gray-800" : "bg-white"}`} whileHover={glossyHover}>
             <h3 className="font-semibold text-xl text-yellow-600">{translations[language].previousOrders}</h3>
-            {orders.filter(o => o.status === "Completed").slice(0, 2).map((order, idx) => (
-              <p key={idx} className={`mt-3 text-base ${darkMode ? "text-gray-300" : "text-gray-700"}`}>Order #{order.id} - ₹{order.totalAmount}</p>
+            {orders.filter((o) => ["Completed", "Cancelled"].includes(o.status)).slice(0, 2).map((order, idx) => (
+              <p key={idx} className={`mt-3 text-base ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
+                Order #{order.id.split("_")[2]} - ₹{order.totalAmount} ({order.status})
+              </p>
             ))}
+            {orders.filter((o) => ["Completed", "Cancelled"].includes(o.status)).length === 0 && (
+              <p className={`mt-3 text-base ${darkMode ? "text-gray-300" : "text-gray-700"}`}>No previous orders</p>
+            )}
           </motion.div>
         </div>
 
@@ -647,7 +728,9 @@ const Dashboard = () => {
         <div className="lg:col-span-3 space-y-6">
           <motion.div className={`p-6 rounded-xl shadow-lg border orders-graph ${darkMode ? "bg-gray-800" : "bg-white"} h-96`} whileHover={glossyHover}>
             <h3 className="font-semibold text-xl text-red-600">{translations[language].ordersGraph}</h3>
-            <div className="mt-4 h-72"><Bar data={ordersData} options={chartOptions} /></div>
+            <div className="mt-4 h-72">
+              <Bar data={ordersData} options={chartOptions} />
+            </div>
           </motion.div>
 
           <motion.div className={`p-6 rounded-xl shadow-lg border your-products ${darkMode ? "bg-gray-800" : "bg-white"}`} whileHover={glossyHover}>
@@ -837,16 +920,16 @@ const Dashboard = () => {
               <div className="flex space-x-3">
                 <button
                   className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm font-medium"
-                  onClick={() => guideStep < guideSteps.length - 1 ? setGuideStep(prev => prev + 1) : setShowGuide(false)}
+                  onClick={() => guideStep < guideSteps.length - 1 ? setGuideStep((prev) => prev + 1) : setShowGuide(false)}
                 >
                   {guideStep < guideSteps.length - 1 ? translations[language].next : translations[language].finish}
                 </button>
                 {guideStep > 0 && (
-                  <button className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-sm font-medium" onClick={() => setGuideStep(prev => prev - 1)}>
+                  <button className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-sm font-medium" onClick={() => setGuideStep((prev) => prev - 1)}>
                     Back
                   </button>
                 )}
-                <button className="px-4 py-2 bg-red-5 00 text-white rounded-lg hover:bg-red-600 text-sm font-medium" onClick={() => setShowGuide(false)}>
+                <button className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 text-sm font-medium" onClick={() => setShowGuide(false)}>
                   Close
                 </button>
               </div>
@@ -869,4 +952,11 @@ const Dashboard = () => {
   );
 };
 
-export default Dashboard;
+// Wrap Dashboard with ErrorBoundary for export
+const DashboardWithErrorBoundary = () => (
+  <ErrorBoundary>
+    <Dashboard />
+  </ErrorBoundary>
+);
+
+export default DashboardWithErrorBoundary;

@@ -4,7 +4,7 @@ import { FaUser, FaHome, FaShoppingCart, FaList, FaHeart, FaMapMarkerAlt, FaCred
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { db, auth } from '../firebase'; // Ensure this points to your initialized Firebase config
-import { ref, onValue, set, remove, update } from 'firebase/database'; // Firebase Realtime Database methods
+import { ref, onValue, set, remove, update, push } from 'firebase/database'; // Firebase Realtime Database methods
 
 const CustomerDashboard = () => {
   const [darkMode, setDarkMode] = useState(false);
@@ -155,7 +155,7 @@ const CustomerDashboard = () => {
     const cartRef = ref(db, `customerDetails/${uid}/cart`);
     onValue(cartRef, (snapshot) => {
       const data = snapshot.val();
-      setCart(data ? Object.values(data) : []);
+      setCart(data ? Object.entries(data).map(([key, value]) => ({ ...value, cartId: key })) : []);
     }, (error) => {
       console.error('Error fetching cart:', error);
       toast.error('Failed to fetch cart.');
@@ -225,29 +225,34 @@ const CustomerDashboard = () => {
 
   const addToCart = (product, qty = 1) => {
     const uid = auth.currentUser?.uid;
-    if (!uid) return;
+    console.log("Adding to cart. UID:", uid, "Product:", product.name);
+    if (!uid) {
+      toast.error("Please log in to add items to cart.");
+      return;
+    }
 
-    const cartRef = ref(db, `customerDetails/${uid}/cart/${product.id}`);
-    const cartItem = { ...product, qty };
-    set(cartRef, cartItem)
+    const cartRef = ref(db, `customerDetails/${uid}/cart`);
+    const newCartItemRef = push(cartRef); // Generate a unique push ID
+    const cartItem = { ...product, qty, cartId: newCartItemRef.key };
+    set(newCartItemRef, cartItem)
       .then(() => toast.success(`${product.name} added to cart!`))
       .catch((error) => toast.error('Failed to add to cart: ' + error.message));
   };
 
-  const updateCartItem = (id, qty) => {
+  const updateCartItem = (cartId, qty) => {
     const uid = auth.currentUser?.uid;
     if (!uid) return;
 
-    const cartRef = ref(db, `customerDetails/${uid}/cart/${id}`);
+    const cartRef = ref(db, `customerDetails/${uid}/cart/${cartId}`);
     update(cartRef, { qty: Math.max(1, qty) })
       .catch((error) => toast.error('Failed to update cart: ' + error.message));
   };
 
-  const removeCartItem = (id) => {
+  const removeCartItem = (cartId) => {
     const uid = auth.currentUser?.uid;
     if (!uid) return;
 
-    const cartRef = ref(db, `customerDetails/${uid}/cart/${id}`);
+    const cartRef = ref(db, `customerDetails/${uid}/cart/${cartId}`);
     remove(cartRef)
       .then(() => toast.info('Item removed from cart.'))
       .catch((error) => toast.error('Failed to remove from cart: ' + error.message));
@@ -396,7 +401,7 @@ const CustomerDashboard = () => {
       })
       .catch((error) => {
         console.error('Error placing order:', error);
-        toast.error('Failed to place order: ' + error.message);
+        toast.error('Failed toэ place order: ' + error.message);
       });
   };
 
@@ -547,7 +552,7 @@ const CustomerDashboard = () => {
         <div>
           <h3 className="text-lg font-semibold text-gray-800 dark:text-teal-300">Items in Cart</h3>
           {cart.map((item) => (
-            <div key={item.id} className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-xl shadow-lg mb-4">
+            <div key={item.cartId} className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-xl shadow-lg mb-4">
               <div className="flex items-center space-x-4">
                 <img src={item.image} alt={item.name} className="w-16 h-16 rounded-md" />
                 <div>
@@ -890,7 +895,7 @@ const CustomerDashboard = () => {
             ) : (
               <>
                 {cart.map((item) => (
-                  <motion.div key={item.id} className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-xl shadow-lg mb-6">
+                  <motion.div key={item.cartId} className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-xl shadow-lg mb-6">
                     <div className="flex items-center space-x-4">
                       <img src={item.image} alt={item.name} className="w-16 h-16 rounded-md" />
                       <div>
@@ -904,12 +909,12 @@ const CustomerDashboard = () => {
                       <input
                         type="number"
                         value={item.qty}
-                        onChange={(e) => updateCartItem(item.id, parseInt(e.target.value) || 1)}
+                        onChange={(e) => updateCartItem(item.cartId, parseInt(e.target.value) || 1)}
                         className="w-16 p-2 rounded-lg border border-gray-300 dark:border-gray-600 text-center bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
                         min="1"
                       />
                       <p className="text-teal-600 dark:text-teal-400 font-medium">₹{(item.qty * item.price).toFixed(2)}</p>
-                      <button onClick={() => removeCartItem(item.id)} className="text-red-500 hover:text-red-700">
+                      <button onClick={() => removeCartItem(item.cartId)} className="text-red-500 hover:text-red-700">
                         <FaTrash />
                       </button>
                     </div>

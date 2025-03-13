@@ -199,7 +199,7 @@ const Home = () => {
             ].map((feature, index) => (
               <motion.div
                 key={feature.title}
-                className="bg-white p-6 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-emerald-100/50 hover:border-emerald-200 transform hover:-translate-y-2 cursor-pointer group"
+                className="bg-white p-20 h-80 w-80 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-emerald-100/50 hover:border-emerald-200 transform hover:-translate-y-2 cursor-pointer group"
                 custom={index}
                 variants={cardVariants}
                 initial="hidden"

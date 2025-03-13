@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { 
-  auth, 
-  provider, 
-  signInWithPopup, 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
+import {
+  auth,
+  provider,
+  signInWithPopup,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   sendPasswordResetEmail,
   sendEmailVerification,
-  signOut
+  signOut,
 } from "../firebase.js";
 import { getDatabase, ref, set, get } from "firebase/database";
 import { ToastContainer, toast } from "react-toastify";
@@ -19,11 +19,10 @@ const LoginFar = ({ setAuth }) => {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [name, setName] = useState("");
-  const [role, setRole] = useState("farmer");
-  const [view, setView] = useState("login");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [view, setView] = useState("login");
 
   const navigate = useNavigate();
   const db = getDatabase();
@@ -31,67 +30,77 @@ const LoginFar = ({ setAuth }) => {
   const togglePasswordVisibility = () => setShowPassword(!showPassword);
   const toggleConfirmPasswordVisibility = () => setShowConfirmPassword(!showConfirmPassword);
 
+  // Check auth state only on mount, but don’t redirect unless explicitly logging in
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
-      if (user) {
-        checkUserRoleAndNavigate(user);
+      if (user && !loading) {
+        // User is already logged in, but don’t redirect yet
+        console.log("User already authenticated on mount, UID:", user.uid);
+        setAuth(true); // Set auth state, but let routing handle navigation
+      } else if (!user) {
+        console.log("No user authenticated on mount");
+        setAuth(false);
+        navigate("/login"); // Ensure we stay on login page if not authenticated
       }
     });
     return () => unsubscribe();
-  }, []);
+  }, [navigate, setAuth]);
 
-  
-  const handleGoogleLogin = async () => {
-    setLoading(true);
+  const checkUserRoleAndNavigate = async (user) => {
     try {
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-
       const userRef = ref(db, `users/${user.uid}`);
       const userSnapshot = await get(userRef);
 
       if (userSnapshot.exists()) {
         const userData = userSnapshot.val();
         const userRole = userData.role;
+        console.log("Existing user role from DB:", userRole);
 
-        const token = await user.getIdToken();
-        localStorage.setItem("token", token);
-        localStorage.setItem("role", userRole);
-        localStorage.setItem("userDetails", JSON.stringify({
-          uid: user.uid,
-          email: user.email,
-          name: userData.name || user.displayName,
-        }));
-
-        toast.success("Login Successful!");
-        setAuth(true);
-        navigate(userRole === "farmer" ? "/dashboard" : "/consumer-dashboard");
-        console.log(userRole);
+        if (userRole !== "farmer") {
+          await set(ref(db, `users/${user.uid}/role`), "farmer");
+          console.log("Role updated to farmer for UID:", user.uid);
+        }
       } else {
-        // New Google user, prompt for role and save directly
         const userData = {
           email: user.email,
           name: user.displayName || "Google User",
           uid: user.uid,
-          role: role, // Default to selected role
+          role: "farmer",
           createdAt: new Date().toISOString(),
-          emailVerified: true, // Google users are assumed verified
+          emailVerified: user.emailVerified || true,
         };
-        await set(ref(db, `users/${user.uid}`), userData);
-
-        const token = await user.getIdToken();
-        localStorage.setItem("token", token);
-        localStorage.setItem("role", role);
-        localStorage.setItem("userDetails", JSON.stringify({
-          uid: user.uid,
-          email: user.email,
-          name: userData.name,
-        }));
-
-        toast.success("Sign-up Successful!");
-        setAuth(true);
-        navigate(role === "farmer" ? "/dashboard" : "/consumer-dashboard");
+        await set(userRef, userData);
+        console.log("New user created with role: farmer");
       }
+
+      const token = await user.getIdToken();
+      localStorage.setItem("token", token);
+      localStorage.setItem("role", "farmer");
+      localStorage.setItem("userDetails", JSON.stringify({
+        uid: user.uid,
+        email: user.email,
+        name: user.displayName || userSnapshot.val()?.name || "Farmer",
+      }));
+
+      setAuth(true);
+      console.log("Redirecting to /dashboard after login");
+      navigate("/dashboard");
+    } catch (error) {
+      console.error("Error checking user role:", error);
+      toast.error("Failed to authenticate user.");
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    try {
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+
+      console.log("Google login successful, UID:", user.uid);
+      await checkUserRoleAndNavigate(user);
+
+      toast.success("Login Successful!");
     } catch (error) {
       console.error("Google login error:", error.message);
       toast.error(error.message || "Google login failed");
@@ -113,30 +122,13 @@ const LoginFar = ({ setAuth }) => {
       if (!user.emailVerified) {
         await signOut(auth);
         toast.error("Email not verified! Please verify your email.");
-        setLoading(false);
         return;
       }
 
-      const userRef = ref(db, `users/${user.uid}`);
-      const snapshot = await get(userRef);
-      if (!snapshot.exists()) {
-        throw new Error("User data not found in database");
-      }
-      const userData = snapshot.val();
-      const userRole = userData.role;
-
-      const token = await user.getIdToken();
-      localStorage.setItem("token", token);
-      localStorage.setItem("role", userRole);
-      localStorage.setItem("userDetails", JSON.stringify({
-        uid: user.uid,
-        email: user.email,
-        name: userData.name || user.displayName,
-      }));
+      console.log("Email login successful, UID:", user.uid);
+      await checkUserRoleAndNavigate(user);
 
       toast.success("Login Successful!");
-      setAuth(true);
-      navigate(userRole === "farmer" ? "/dashboard" : "/consumer-dashboard");
     } catch (error) {
       console.error("Login error:", error.code, error.message);
       if (error.code === "auth/wrong-password") {
@@ -152,7 +144,7 @@ const LoginFar = ({ setAuth }) => {
   };
 
   const handleRegister = async () => {
-    if (!email || !password || !confirmPassword || !name || !role) {
+    if (!email || !password || !confirmPassword || !name) {
       toast.error("All fields are required!");
       return;
     }
@@ -169,14 +161,15 @@ const LoginFar = ({ setAuth }) => {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      await set(ref(db, `users/${user.uid}`), {
+      const userData = {
         email,
         name,
         uid: user.uid,
-        role,
+        role: "farmer",
         createdAt: new Date().toISOString(),
         emailVerified: false,
-      });
+      };
+      await set(ref(db, `users/${user.uid}`), userData);
 
       await sendEmailVerification(user);
       toast.success("Registration successful! Please verify your email.");
@@ -246,7 +239,7 @@ const LoginFar = ({ setAuth }) => {
           </div>
         ) : view === "login" ? (
           <>
-            <h2 className="text-3xl font-bold">Welcome Back!</h2>
+            <h2 className="text-3xl font-bold">Welcome Back, Farmer!</h2>
             <p className="mt-1 text-gray-500">It's nice to see you again. Ready to sell?</p>
             <div className="w-full max-w-sm mt-5">
               <input
@@ -281,8 +274,8 @@ const LoginFar = ({ setAuth }) => {
                 Log In
               </button>
               <div className="flex justify-end mt-3 text-sm">
-                <button 
-                  className="text-blue-500 disabled:text-gray-400" 
+                <button
+                  className="text-blue-500 disabled:text-gray-400"
                   onClick={handleForgotPassword}
                   disabled={loading}
                 >
@@ -290,8 +283,7 @@ const LoginFar = ({ setAuth }) => {
                 </button>
               </div>
               <div className="flex items-center my-5 text-gray-500">
-                <hr className="flex-grow" /> <span className="mx-2">or</span>{" "}
-                <hr className="flex-grow" />
+                <hr className="flex-grow" /> <span className="mx-2">or</span> <hr className="flex-grow" />
               </div>
               <button
                 className="w-full p-3 border border-gray-300 rounded-md flex items-center justify-center hover:bg-gray-100 disabled:bg-gray-200"
@@ -307,8 +299,8 @@ const LoginFar = ({ setAuth }) => {
               </button>
               <p className="mt-3 text-center">
                 Don't have an account?{" "}
-                <button 
-                  className="text-blue-500 disabled:text-gray-400" 
+                <button
+                  className="text-blue-500 disabled:text-gray-400"
                   onClick={() => setView("signup")}
                   disabled={loading}
                 >
@@ -319,8 +311,8 @@ const LoginFar = ({ setAuth }) => {
           </>
         ) : (
           <>
-            <h2 className="text-3xl font-bold">Create an Account</h2>
-            <p className="mt-1 text-gray-500">Join our community today!</p>
+            <h2 className="text-3xl font-bold">Create a Farmer Account</h2>
+            <p className="mt-1 text-gray-500">Join our farming community today!</p>
             <div className="w-full max-w-sm mt-5">
               <input
                 type="text"
@@ -370,14 +362,6 @@ const LoginFar = ({ setAuth }) => {
                   👁
                 </span>
               </div>
-              <select
-                className="w-full p-3 mb-3 border border-gray-300 rounded-md hover:bg-gray-100"
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-                disabled={loading}
-              >
-                <option value="farmer">Farmer</option>
-              </select>
               <button
                 className="w-full p-3 bg-purple-300 text-white rounded-md hover:bg-purple-500 disabled:bg-gray-400"
                 onClick={handleRegister}
@@ -389,8 +373,7 @@ const LoginFar = ({ setAuth }) => {
                 className="mt-3 text-center text-gray-700 hover:scale-105 cursor-pointer"
                 onClick={() => setView("login")}
               >
-                Already have an account?{" "}
-                <span className="text-blue-500">Log in</span>
+                Already have an account? <span className="text-blue-500">Log in</span>
               </p>
             </div>
           </>

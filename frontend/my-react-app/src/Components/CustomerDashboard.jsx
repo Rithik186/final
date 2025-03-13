@@ -385,7 +385,7 @@ const CustomerDashboard = () => {
         type: selectedAddress.type,
         details: selectedAddress.details,
       },
-      status: 'Pending', // Initial status
+      status: 'Success', // Changed from 'Pending' to 'Success'
     };
 
     set(ordersRef, order)
@@ -401,7 +401,7 @@ const CustomerDashboard = () => {
       })
       .catch((error) => {
         console.error('Error placing order:', error);
-        toast.error('Failed toэ place order: ' + error.message);
+        toast.error('Failed to place order: ' + error.message);
       });
   };
 

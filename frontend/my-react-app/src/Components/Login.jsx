@@ -27,7 +27,7 @@ const Login = () => {
             <p className="text-lg text-gray-100 mb-8 opacity-85 leading-relaxed">
               Skip the middleman, increase revenue, and embrace sustainable farming with cutting-edge transparency.
             </p>
-            <Link to="/loginfar">
+            <Link to="/farmer">
               <button className="bg-yellow-400 text-cyan-900 font-semibold py-4 px-12 rounded-full shadow-lg hover:bg-yellow-300 hover:shadow-xl hover:scale-105 transition-all duration-300">
                 Start Farming
               </button>

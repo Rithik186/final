@@ -34,7 +34,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login setAuth={setAuth} />} />
-        <Route path="/loginfar" element={<LoginFar setAuth={setAuth} />} />
+        <Route path="/farmer" element={<LoginFar setAuth={setAuth} />} />
         <Route path="/logincon" element={<LoginCon setAuth={setAuth} />} />
         <Route path="/signup" element={<Register setAuth={setAuth} />} />
         <Route

@@ -1,159 +1,222 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { Mic, User, Settings, LogOut } from "lucide-react";
-import { auth } from "../firebase.js";
-import { getDatabase, ref, push, set } from "firebase/database";
-
-// Cleaned and standardized product data
-const products = [
-  { id: 1, name: "Fresh Carrots", tamilName: "கேரட்", hindiName: "गाजर", category: "Vegetables", weight: "1kg", image: "https://www.bigbasket.com/media/uploads/p/xxl/10000070_16-fresho-carrot-orange.jpg" },
-  { id: 2, name: "Organic Tomatoes", tamilName: "தக்காளி", hindiName: "टमाटर", category: "Vegetables", weight: "1kg", image: "https://www.bbassets.com/media/uploads/p/l/40130385_8-fresho-tomato-local-organically-grown.jpg" },
-  { id: 3, name: "Green Apples", tamilName: "பச்சை ஆப்பிள்கள்", hindiName: "हरे सेब", category: "Fruits", weight: "1kg", image: "https://www.bbassets.com/media/uploads/p/l/20000964_11-fresho-green-apple.jpg" },
-  { id: 4, name: "Bananas", tamilName: "வாழைப்பழம்", hindiName: "केला", category: "Fruits", weight: "1kg", image: "https://www.bbassets.com/media/uploads/p/l/10000025_32-fresho-banana-robusta.jpg" },
-  { id: 5, name: "Almond Seeds", tamilName: "பாதாம் விதைகள்", hindiName: "बादाम के बीज", category: "Seeds", weight: "1kg", image: "https://cbx-prod.b-cdn.net/COLOURBOX47480356.jpg?width=800&height=800&quality=70" },
-  { id: 6, name: "Fresh Milk", tamilName: "பால்", hindiName: "ताजा दूध", category: "Dairy Products", weight: "1kg", image: "https://img.freepik.com/free-photo/fresh-milk-bottle-glass_1150-17631.jpg" },
-  { id: 7, name: "Cheese", tamilName: "சீஸ்", hindiName: "पनीर", category: "Dairy Products", weight: "1kg", image: "https://www.allrecipes.com/thmb/PwgOsAXFGvpolr0hUiB7pVlS75k=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/Yellow-vs-White-Cheddar-Cheese-4x3-de76c824c4814aa8a5d52569d572713d.png" },
-  { id: 8, name: "Organic Fertilizer", tamilName: "ஆர்கானிக் உரம்", hindiName: "जैविक उर्वरक", category: "Fertilizers", weight: "1kg", image: "https://www.bbassets.com/media/uploads/p/l/40008672_5-natures-plus-organic-fertiliser.jpg" },
-  { id: 9, name: "Strawberries", tamilName: "ஸ்ட்ராபெர்ரி", hindiName: "स्ट्रॉबेरी", category: "Fruits", weight: "1kg", image: "https://www.bbassets.com/media/uploads/p/l/10000263_14-fresho-strawberry.jpg" },
-  { id: 10, name: "Cabbage", tamilName: "முட்டைக்கோஸ்", hindiName: "पत्तागोभी", category: "Vegetables", weight: "1kg", image: "https://www.bbassets.com/media/uploads/p/l/40023473_6-fresho-cabbage-organically-grown.jpg" },
-  { id: 11, name: "Sunflower Seeds", tamilName: "சூரியகாந்தி விதைகள்", hindiName: "सूरजमुखी के बीज", category: "Seeds", weight: "1kg", image: "https://m.media-amazon.com/images/I/71yz2Pi2SBL._AC_UF1000,1000_QL80_.jpg" },
-  { id: 12, name: "Butter", tamilName: "வெண்ணெய்", hindiName: "मक्खन", category: "Dairy Products", weight: "1kg", image: "https://5.imimg.com/data5/FN/OM/MY-23458232/fresh-butter-500x500.jpg" },
-  { id: 13, name: "Black Grapes", tamilName: "கருப்பு திராட்சை", hindiName: "काले अंगूर", category: "Fruits", weight: "1kg", image: "https://www.bbassets.com/media/uploads/p/l/40229414_5-fresho-grapes-black-imported.jpg" },
-  { id: 14, name: "Walnut Seeds", tamilName: "வால்நட் விதைகள்", hindiName: "अखरोट के बीज", category: "Seeds", weight: "1kg", image: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQl1uFxggfeCevz0KDDxI0yRFtimetZlW8gBg&s" },
-  { id: 15, name: "Whole Wheat Bread", tamilName: "முழு கோதுமை ரொட்டி", hindiName: "साबुत गेहूं की रोटी", category: "Dairy Products", weight: "1kg", image: "https://www.bbassets.com/media/uploads/p/l/40232043_5-tasties-whole-wheat-bread.jpg" },
-  { id: 16, name: "Broccoli", tamilName: "ப்ரோக்கோலி", hindiName: "ब्रोकली", category: "Vegetables", weight: "1kg", image: "https://www.bbassets.com/media/uploads/p/l/10000063_21-fresho-broccoli.jpg" },
-  { id: 17, name: "Cashew Nuts", tamilName: "முந்திரி", hindiName: "काजू", category: "Seeds", weight: "1kg", image: "https://www.bigbasket.com/media/uploads/p/l/40210969_2-super-saver-cashews.jpg" },
-  { id: 18, name: "Soy Milk", tamilName: "சோயா பால்", hindiName: "सोया दूध", category: "Dairy Products", weight: "1kg", image: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS5WhsVF0dPYb_uCLSQBM9h5YV28R6rx1BUgQ&s" },
-  { id: 19, name: "Paneer", tamilName: "பன்னீர்", hindiName: "पनीर", category: "Dairy Products", weight: "1kg", image: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTE0FvAhZ2WHLHm2ct5sSG4qWz3zDnFZb68Dg&s" },
-  { id: 20, name: "Oranges", tamilName: "ஆரஞ்சு", hindiName: "संतरा", category: "Fruits", weight: "1kg", image: "https://www.bbassets.com/media/uploads/p/l/10000384_11-fresho-orange-kinnow.jpg" },
-  { id: 21, name: "Peanut Butter", tamilName: "வேர்க்கடலை வெண்ணெய்", hindiName: "मूंगफली का मक्खन", category: "Dairy Products", weight: "1kg", image: "https://www.inspiredtaste.net/wp-content/uploads/2020/06/Homemade-Almond-Butter-Recipe-1200.jpg" },
-  { id: 22, name: "Chia Seeds", tamilName: "சியா விதைகள்", hindiName: "चिया बीज", category: "Seeds", weight: "1kg", image: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRvZjGXEwMOZGqAA8Hci-B0z7bAoUyH-DiABg&s" },
-  { id: 23, name: "Pistachios", tamilName: "பிஸ்தா", hindiName: "पिस्ता", category: "Seeds", weight: "1kg", image: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRllzjvljJNOZtXHWCf4e0Pcc9Lgh0vEq30cA&s" },
-  { id: 24, name: "Pumpkin Seeds", tamilName: "பூசணி விதைகள்", hindiName: "कद्दू के बीज", category: "Seeds", weight: "1kg", image: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQf2eV4W2kvtv0U0eKWRUak0R35oTbMrsI0OQ&s" },
-  { id: 25, name: "Brown Rice", tamilName: "பழுப்பு அரிசி", hindiName: "भूरा चावल", category: "Seeds", weight: "1kg", image: "https://images.onlymyhealth.com/imported/images/2024/June/26_Jun_2024/mn-brown-rice.jpg" },
-  { id: 26, name: "Quinoa", tamilName: "குயினோவா", hindiName: "क्विनोआ", category: "Seeds", weight: "1kg", image: "https://imgs.littleextralove.com/wp-content/uploads/2022/11/quinoa-for-hair-feat.jpg" },
-  { id: 27, name: "Avocado", tamilName: "வெண்ணெய் பழம்", hindiName: "एवोकाडो", category: "Fruits", weight: "1kg", image: "https://www.bbassets.com/media/uploads/p/l/10000312_21-fresho-avocado.jpg" },
-  { id: 28, name: "Mushrooms", tamilName: "காளான்", hindiName: "मशरूम", category: "Vegetables", weight: "1kg", image: "https://www.bbassets.com/media/uploads/p/l/10000273_17-fresho-mushrooms-button.jpg" },
-  { id: 29, name: "Spinach", tamilName: "கீரை", hindiName: "पालक", category: "Vegetables", weight: "1kg", image: "https://www.bigbasket.com/media/uploads/p/l/40217496_3-fresho-spinach-hydroponically-grown.jpg" },
-  { id: 30, name: "Blueberries", tamilName: "ப்ளூபெர்ரி", hindiName: "ब्लूबेरी", category: "Fruits", weight: "1kg", image: "https://www.bbassets.com/media/uploads/p/l/30009286_12-fresho-blueberry.jpg" },
-  { id: 31, name: "Raspberries", tamilName: "ராஸ்பெர்ரி", hindiName: "रसभरी", category: "Fruits", weight: "1kg", image: "https://www.bigbasket.com/media/uploads/p/l/40099570_2-fresho-raspberry.jpg" },
-  { id: 32, name: "Coconut Oil", tamilName: "தேங்காய் எண்ணெய்", hindiName: "नारियल तेल", category: "Herbs", weight: "1kg", image: "https://kumarmetal.com/wp-content/uploads/2021/08/setting-up-virgin-coconut-oil-plant.jpg" },
-  { id: 33, name: "Olive Oil", tamilName: "ஆலிவ் எண்ணெய்", hindiName: "जैतून का तेल", category: "Herbs", weight: "1kg", image: "https://www.tatasimplybetter.com/cdn/shop/files/DSC09606_2048x2048.jpg?v=1734608321" },
-  { id: 34, name: "Flaxseeds", tamilName: "ஆளி விதைகள்", hindiName: "अलसी के बीज", category: "Seeds", weight: "1kg", image: "https://domf5oio6qrcr.cloudfront.net/medialibrary/5961/cba8bd1b-be70-4f55-8818-9caf1b3df3de.jpg" },
-  { id: 35, name: "Honey", tamilName: "தேன்", hindiName: "शहद", category: "Herbs", weight: "1kg", image: "https://5.imimg.com/data5/UD/MB/MY-42635865/natural-honey-500x500.jpg" },
-  { id: 36, name: "Almond Butter", tamilName: "பாதாம் வெண்ணெய்", hindiName: "बादाम मक्खन", category: "Dairy Products", weight: "1kg", image: "https://www.inspiredtaste.net/wp-content/uploads/2020/06/Homemade-Almond-Butter-Recipe-1200.jpg" },
-  { id: 37, name: "Zucchini", tamilName: "சீமை சுரைக்காய்", hindiName: "ज़ुक्किनी", category: "Vegetables", weight: "1kg", image: "https://www.bbassets.com/media/uploads/p/l/40211817_3-fresho-zucchini-green.jpg" },
-  { id: 38, name: "Mangoes", tamilName: "மாங்காய்", hindiName: "आम", category: "Fruits", weight: "1kg", image: "https://www.bigbasket.com/media/uploads/p/l/40324153_2-fresho-mango-badami.jpg" },
-  { id: 39, name: "Lettuce", tamilName: "லெட்டூஸ்", hindiName: "सलाद पत्ता", category: "Vegetables", weight: "1kg", image: "https://www.bbassets.com/media/uploads/p/l/10000318_14-fresho-lettuce-green.jpg" },
-  { id: 40, name: "Eggs", tamilName: "முட்டை", hindiName: "अंडे", category: "Dairy Products", weight: "1kg", image: "https://www.bbassets.com/media/uploads/p/l/150502_6-fresho-farm-eggs-table-tray-medium-antibiotic-residue-free.jpg" },
-  { id: 41, name: "Cinnamon", tamilName: "இலவங்கப்பட்டை", hindiName: "दालचीनी", category: "Herbs", weight: "1kg", image: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTsqlvKSkdy63JB_1zan4kFnkQkTYU0zQed2w&s" },
-  { id: 42, name: "Black Pepper", tamilName: "கருப்பு மிளகு", hindiName: "काली मिर्च", category: "Herbs", weight: "1kg", image: "https://ashokchakranursery.com/wp-content/uploads/2024/12/blackky.webp" },
-  { id: 43, name: "Turmeric", tamilName: "மஞ்சள்", hindiName: "हल्दी", category: "Herbs", weight: "1kg", image: "https://www.bigbasket.com/media/uploads/p/l/40020040_11-fresho-turmeric-fresh.jpg" },
-  { id: 44, name: "Cloves", tamilName: "கிராம்பு", hindiName: "लौंग", category: "Herbs", weight: "1kg", image: "https://rukminim2.flixcart.com/image/850/1000/xif0q/plant-seed/q/o/1/50-rxi-16-cloves-lavanga-seeds-50-seeds-vibex-original-imaggnksk72yapmb.jpeg?q=20&crop=false" },
-  { id: 45, name: "Cardamom", tamilName: "ஏலக்காய்", hindiName: "इलायची", category: "Herbs", weight: "1kg", image: "https://mangalorespice.com/cdn/shop/products/SP_08-02.jpg?v=1734783515&width=1445" },
-  { id: 46, name: "Bay Leaves", tamilName: "வளைகுடா இலைகள்", hindiName: "तेजपत्ता", category: "Herbs", weight: "1kg", image: "https://www.bbassets.com/media/uploads/p/l/40288349_2-super-saver-bb-super-saver-bay-leaf-50g.jpg" },
-  { id: 47, name: "Coriander Powder", tamilName: "கொத்தமல்லி பொடி", hindiName: "धनिया पाउडर", category: "Herbs", weight: "1kg", image: "https://c.ndtvimg.com/2023-03/p4igk5po_dry-coriander-leaves_625x300_10_March_23.jpg?im=FaceCrop,algorithm=dnn,width=1200,height=675" },
-  { id: 48, name: "Fenugreek Seeds", tamilName: "வெந்தய விதைகள்", hindiName: "मेथी दाना", category: "Seeds", weight: "1kg", image: "https://encrypted-tbn0.gstatic.com/images?q=tbngcRIxYjphT6AhMLmiUV85nNx_0urQI4VvNO9iw&s" },
-  { id: 49, name: "Basil", tamilName: "துளசி", hindiName: "तुलसी", category: "Herbs", weight: "1kg", image: "https://www.bigbasket.com/media/uploads/p/l/10000314_14-fresho-basil-italian.jpg" },
-  { id: 50, name: "Rosemary", tamilName: "ரோஸ்மேரி", hindiName: "रोज़मेरी", category: "Herbs", weight: "1kg", image: "https://www.bbassets.com/media/uploads/p/l/30006429_1-fresho-rosemary.jpg" },
-  { id: 51, name: "Thyme", tamilName: "தைம்", hindiName: "अजवायन के फूल", category: "Herbs", weight: "1kg", image: "https://www.bigbasket.com/media/uploads/p/l/40026327_3-fresho-thyme.jpg" },
-  { id: 52, name: "Parsley", tamilName: "வோக்கோசு", hindiName: "अजमोद", category: "Herbs", weight: "1kg", image: "https://www.bbassets.com/media/uploads/p/l/40101325_1-fresho-kale-curled-american.jpg" },
-  { id: 53, name: "Papaya", tamilName: "பப்பாளி", hindiName: "पपीता", category: "Fruits", weight: "1kg", image: "https://www.bigbasket.com/media/uploads/p/l/40329344_1-fresho-papaya-medium.jpg" },
-  { id: 54, name: "Cucumber", tamilName: "வெள்ளரிக்காய்", hindiName: "खीरा", category: "Vegetables", weight: "1kg", image: "https://www.bbassets.com/media/uploads/p/l/50000491_7-fresho-cucumber-organically-grown.jpg" },
-  { id: 55, name: "Watermelon", tamilName: "தர்பூசணி", hindiName: "तरबूज", category: "Fruits", weight: "1kg", image: "https://www.bbassets.com/media/uploads/p/l/10000297_23-fresho-watermelon-striped-large.jpg" },
-  { id: 56, name: "Dragon Fruit", tamilName: "டிராகன் பழம்", hindiName: "ड्रैगन फल", category: "Fruits", weight: "1kg", image: "https://www.bbassets.com/media/uploads/p/l/40008982_16-fresho-dragon-fruit.jpg" },
-  { id: 57, name: "Pineapple", tamilName: "அன்னாசிப்பழம்", hindiName: "अनानास", category: "Fruits", weight: "1kg", image: "https://www.bigbasket.com/media/uploads/p/l/10000156_30-fresho-pineapple.jpg" },
-  { id: 58, name: "Ginger", tamilName: "இஞ்சி", hindiName: "अदरक", category: "Herbs", weight: "1kg", image: "https://www.bbassets.com/media/uploads/p/l/10000338_15-fresho-ginger.jpg" },
-  { id: 59, name: "Garlic", tamilName: "பூண்டு", hindiName: "लहसुन", category: "Herbs", weight: "1kg", image: "https://www.bbassets.com/media/uploads/p/l/10000114_18-fresho-garlic.jpg" },
-  { id: 60, name: "Beetroot", tamilName: "பீட்ரூட்", hindiName: "चुकंदर", category: "Vegetables", weight: "1kg", image: "https://www.bigbasket.com/media/uploads/p/l/10000045_19-fresho-beetroot.jpg" },
-  { id: 61, name: "Celery", tamilName: "செலரி", hindiName: "अजवाइन", category: "Herbs", weight: "1kg", image: "https://cdn.britannica.com/68/143768-050-108B71EC/Celery.jpg" },
-  { id: 62, name: "Brussels Sprouts", tamilName: "புருசெல்ஸ் முளைகள்", hindiName: "ब्रसेल्स स्प्राउट्स", category: "Vegetables", weight: "1kg", image: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT3RPU-SU7J8vgl7dSEkLGCRCjMXTH0312AjQ&s" },
-  { id: 63, name: "Potatoes", tamilName: "உருளைக்கிழங்கு", hindiName: "आलू", category: "Vegetables", weight: "1kg", image: "https://www.bigbasket.com/media/uploads/p/l/10000159_25-fresho-potato.jpg" },
-  { id: 64, name: "Onions", tamilName: "வெங்காயம்", hindiName: "प्याज", category: "Vegetables", weight: "1kg", image: "https://www.bigbasket.com/media/uploads/p/l/10000148_22-fresho-onion.jpg" },
-].filter(Boolean); // Remove any null entries
+import { Mic, Settings, LogOut, Plus } from "lucide-react";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import { auth } from "../firebase.js"; // Firebase Auth
+import { getDatabase, ref, onValue, push, set } from "firebase/database"; // Firebase Realtime Database
 
 const ProductSelection = () => {
   const navigate = useNavigate();
+  const [allProducts, setAllProducts] = useState([]); // All products from Goods
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [billList, setBillList] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [disputes, setDisputes] = useState([]);
+  const [newDispute, setNewDispute] = useState("");
   const [language, setLanguage] = useState("English");
   const [isListening, setIsListening] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
-  const [farmerInfo, setFarmerInfo] = useState({ name: "John Doe", email: "john@example.com" });
-  const [loading, setLoading] = useState(false);
+  const [farmerInfo, setFarmerInfo] = useState({ name: "John Doe", email: "john@example.com", id: "" });
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const db = getDatabase();
 
+  const translations = {
+    English: {
+      farmersMarket: "Farmer's Market",
+      searchProducts: "Search products...",
+      addToBill: "Add to Bill",
+      yourBill: "Your Bill",
+      subtotal: "Subtotal",
+      total: "Total",
+      saveToProducts: "Save to Products",
+      saving: "Saving...",
+      disputeSection: "Dispute Section",
+      replyToQuery: "Reply to query...",
+      submit: "Submit",
+      addSelectedProducts: "Add Selected Products",
+      vegetables: "Vegetables",
+      fruits: "Fruits",
+      seeds: "Seeds",
+      dairyProducts: "Dairy Products",
+      fertilizers: "Fertilizers",
+      herbs: "Herbs",
+    },
+    தமிழ்: {
+      farmersMarket: "விவசாய சந்தை",
+      searchProducts: "தயாரிப்புகளைத் தேடு...",
+      addToBill: "பில் சேர்",
+      yourBill: "உங்கள் பில்",
+      subtotal: "துணை மொத்தம்",
+      total: "மொத்தம்",
+      saveToProducts: "தயாரிப்புகளாக சேமி",
+      saving: "சேமிக்கிறது...",
+      disputeSection: "புகார் பிரிவு",
+      replyToQuery: "வாடிக்கையாளர்களின் கேள்விக்கு பதில்...",
+      submit: "சமர்ப்பி",
+      addSelectedProducts: "தேர்ந்தெடுத்த பொருட்களை சேர்",
+      vegetables: "காய்கறிகள்",
+      fruits: "பழங்கள்",
+      seeds: "விதைகள்",
+      dairyProducts: "பால் பொருட்கள்",
+      fertilizers: "உரங்கள்",
+      herbs: "மூலிகைகள்",
+    },
+    हिन्दी: {
+      farmersMarket: "किसान बाजार",
+      searchProducts: "उत्पाद खोजें...",
+      addToBill: "बिल में जोड़ें",
+      yourBill: "आपका बिल",
+      subtotal: "उप-योग",
+      total: "कुल",
+      saveToProducts: "उत्पादों में सहेजें",
+      saving: "सहेजा जा रहा है...",
+      disputeSection: "विवाद अनुभाग",
+      replyToQuery: "प्रश्न का जवाब दें...",
+      submit: "जमा करें",
+      addSelectedProducts: "चयनित उत्पाद जोड़ें",
+      vegetables: "सब्जियाँ",
+      fruits: "फल",
+      seeds: "बीज",
+      dairyProducts: "डेयरी उत्पाद",
+      fertilizers: "उर्वरक",
+      herbs: "जड़ी-बूटियाँ",
+    },
+  };
+
+  // Fetch farmer info
   useEffect(() => {
     const user = auth.currentUser;
     if (user) {
       setFarmerInfo({
         name: user.displayName || "Farmer",
         email: user.email || "No email",
+        id: user.uid,
       });
     } else {
       navigate("/login");
     }
   }, [navigate]);
 
+  // Fetch products from Goods node
   useEffect(() => {
-    if (!("webkitSpeechRecognition" in window)) return;
+    setLoading(true);
+    const goodsRef = ref(db, "goods");
+    const unsubscribe = onValue(
+      goodsRef,
+      (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+          const productsArray = Object.entries(data).map(([key, value]) => ({
+            id: key,
+            name: value.name || "Unnamed Product",
+            tamilName: value.tamilName || value.name,
+            hindiName: value.hindiName || value.name,
+            weight: value.weight || "N/A",
+            category: value.category || "Uncategorized",
+            image: value.image || "https://via.placeholder.com/150",
+          }));
+          setAllProducts(productsArray);
+        } else {
+          setAllProducts([]);
+          toast.warn("No products found in Goods", { position: "top-right", autoClose: 3000 });
+        }
+        setLoading(false);
+      },
+      (error) => {
+        setError(`Failed to load products: ${error.message}`);
+        toast.error("Failed to load products", { position: "top-right", autoClose: 3000 });
+        setLoading(false);
+      }
+    );
+    return () => unsubscribe();
+  }, [db]);
+
+  // Voice recognition setup
+  useEffect(() => {
+    if (!("webkitSpeechRecognition" in window)) {
+      toast.warn("Speech recognition is not supported in your browser", { position: "top-right", autoClose: 3000 });
+      return;
+    }
+
     const recognition = new window.webkitSpeechRecognition();
     recognition.continuous = false;
     recognition.interimResults = false;
-    recognition.lang = language === "English" ? "en-US" : "ta-IN";
+    recognition.lang = language === "English" ? "en-US" : language === "தமிழ்" ? "ta-IN" : "hi-IN";
 
     recognition.onresult = (event) => {
       const transcript = event.results[0][0].transcript.toLowerCase();
-      const product = products.find((p) =>
-        p.name.toLowerCase().includes(transcript) ||
-        (language === "Tamil" && p.tamilName.toLowerCase().includes(transcript))
+      const product = allProducts.find((p) =>
+        language === "English"
+          ? p.name.toLowerCase().includes(transcript)
+          : language === "தமிழ்"
+          ? p.tamilName?.toLowerCase().includes(transcript)
+          : p.hindiName?.toLowerCase().includes(transcript)
       );
-      if (product) toggleSelection(product);
+      if (product) {
+        toggleSelection(product);
+        toast.success(`Selected: ${language === "English" ? product.name : language === "தமிழ்" ? product.tamilName : product.hindiName}`, {
+          position: "top-right",
+          autoClose: 2000,
+        });
+      } else {
+        toast.info(`No product found for "${transcript}"`, { position: "top-right", autoClose: 2000 });
+      }
       setIsListening(false);
     };
 
-    recognition.onerror = () => setIsListening(false);
+    recognition.onerror = () => {
+      setIsListening(false);
+      toast.error("Speech recognition error", { position: "top-right", autoClose: 2000 });
+    };
     recognition.onend = () => setIsListening(false);
 
     if (isListening) recognition.start();
     return () => recognition.stop();
-  }, [isListening, language]);
+  }, [isListening, language, allProducts]);
 
   const toggleSelection = (product) => {
     setSelectedProducts((prev) =>
       prev.some((p) => p.id === product.id)
         ? prev.filter((p) => p.id !== product.id)
-        : [...prev, product]
+        : [...prev, { ...product, qty: "", customPrice: "", finalPrice: 0 }]
     );
   };
 
   const addToBill = () => {
+    if (selectedProducts.length === 0) {
+      toast.warn("Please select at least one product", { position: "top-right", autoClose: 2000 });
+      return;
+    }
     setBillList((prev) => {
       let updatedBill = [...prev];
       selectedProducts.forEach((product) => {
         const existingIndex = updatedBill.findIndex((item) => item.id === product.id);
+        const qty = Number(product.qty) || 1;
+        const price = Number(product.customPrice) || 0;
         if (existingIndex !== -1) {
-          updatedBill[existingIndex].qty += 1;
-          updatedBill[existingIndex].finalPrice = updatedBill[existingIndex].qty * (Number(updatedBill[existingIndex].customPrice) || 0);
+          updatedBill[existingIndex].qty = qty;
+          updatedBill[existingIndex].customPrice = price;
+          updatedBill[existingIndex].finalPrice = qty * price;
         } else {
-          updatedBill.push({ ...product, qty: 1, customPrice: "", finalPrice: 0 });
+          updatedBill.push({ ...product, qty, customPrice: price, finalPrice: qty * price });
         }
       });
       return updatedBill;
     });
     setSelectedProducts([]);
+    toast.success("Products added to bill", { position: "top-right", autoClose: 2000 });
   };
 
   const updateQuantity = (id, newQty) => {
     setBillList((prev) =>
       prev.map((item) =>
         item.id === id
-          ? { ...item, qty: Math.max(1, newQty), finalPrice: Math.max(1, newQty) * (Number(item.customPrice) || 0) }
+          ? { ...item, qty: newQty === "" ? "" : Math.max(0, Number(newQty)), finalPrice: (newQty === "" ? 0 : Math.max(0, Number(newQty))) * (Number(item.customPrice) || 0) }
           : item
       )
     );
@@ -163,7 +226,7 @@ const ProductSelection = () => {
     setBillList((prev) =>
       prev.map((item) =>
         item.id === id
-          ? { ...item, customPrice: newPrice, finalPrice: item.qty * (Number(newPrice) || 0) }
+          ? { ...item, customPrice: newPrice === "" ? "" : Math.max(0, Number(newPrice)), finalPrice: item.qty * (newPrice === "" ? 0 : Math.max(0, Number(newPrice))) }
           : item
       )
     );
@@ -171,6 +234,7 @@ const ProductSelection = () => {
 
   const removeItem = (id) => {
     setBillList((prev) => prev.filter((item) => item.id !== id));
+    toast.info("Item removed from bill", { position: "top-right", autoClose: 2000 });
   };
 
   const handleSaveProducts = async () => {
@@ -192,6 +256,8 @@ const ProductSelection = () => {
         }
         return {
           name: item.name,
+          tamilName: item.tamilName,
+          hindiName: item.hindiName || item.name,
           quantity: item.qty,
           price,
           category: item.category,
@@ -202,35 +268,40 @@ const ProductSelection = () => {
         };
       });
 
-      const productsRef = ref(db, `products`);
+      const productsRef = ref(db, `products/farmer_${user.uid}`);
       for (const product of productsToSave) {
         const newProductRef = push(productsRef);
         await set(newProductRef, product);
       }
 
       setBillList([]);
-      alert("Products saved successfully!");
+      toast.success("Products saved successfully!", { position: "top-right", autoClose: 2000 });
     } catch (err) {
       console.error("Error saving products:", err.message);
       setError(err.message || "Failed to save products.");
+      toast.error(err.message || "Failed to save products", { position: "top-right", autoClose: 2000 });
     } finally {
       setLoading(false);
     }
   };
 
-  const filteredProducts = products.filter((product) =>
-    language === "English"
-      ? product.name.toLowerCase().includes(searchTerm.toLowerCase())
-      : product.tamilName.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const addDispute = () => {
+    if (newDispute.trim()) {
+      setDisputes((prev) => [...prev, newDispute]);
+      setNewDispute("");
+      toast.success(translations[language].submit, { position: "top-right", autoClose: 2000 });
+    } else {
+      toast.warn("Please enter a dispute before submitting", { position: "top-right", autoClose: 2000 });
+    }
+  };
 
   const categorizedBill = {
     Vegetables: billList.filter((item) => item.category === "Vegetables"),
     Fruits: billList.filter((item) => item.category === "Fruits"),
     Seeds: billList.filter((item) => item.category === "Seeds"),
-    "Dairy Products": billList.filter((item) => item.category === "Dairy Products"),
-    Herbs: billList.filter((item) => item.category === "Herbs"),
     Fertilizers: billList.filter((item) => item.category === "Fertilizers"),
+    Herbs: billList.filter((item) => item.category === "Herbs"),
+    "Dairy Products": billList.filter((item) => item.category === "Dairy Products"),
   };
 
   const totalAmount = billList.reduce((sum, item) => sum + Number(item.finalPrice), 0);
@@ -250,15 +321,32 @@ const ProductSelection = () => {
     visible: { opacity: 1, scale: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } },
   };
 
+  if (loading && !allProducts.length) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-teal-800 text-xl">Loading...</p>
+      </div>
+    );
+  }
+
+  if (error && !allProducts.length) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-red-600 text-xl">{error}</p>
+      </div>
+    );
+  }
+
   return (
     <motion.div
-      className={`min-h-screen p-6 font-sans ${darkMode ? "bg-gray-900 text-white" : "bg-gradient-to-br from-gray-50 to-gray-100 text-gray-900"}`}
+      className={`min-h-screen p-6 ${darkMode ? "bg-gray-900 text-white" : "bg-gradient-to-br from-gray-50 to-teal-50 text-gray-900"}`}
       variants={pageVariants}
       initial="initial"
       animate="animate"
     >
+      <ToastContainer />
       <motion.header
-        className="flex justify-between items-center mb-8 bg-gradient-to-r from-green-500 to-teal-500 p-4 rounded-2xl shadow-lg"
+        className="flex justify-between items-center mb-8 bg-gradient-to-r from-teal-500 to-green-500 p-4 rounded-xl shadow-lg"
         variants={containerVariants}
       >
         <div className="flex items-center space-x-4">
@@ -268,49 +356,45 @@ const ProductSelection = () => {
             className="w-12 h-12 rounded-full border-2 border-white"
             whileHover={{ scale: 1.1, rotate: 360 }}
           />
-          <h1 className="text-2xl font-bold text-white">
-            {language === "English" ? "Farmer's Market" : "விவசாய சந்தை"}
-          </h1>
+          <h1 className="text-2xl font-bold text-white">{translations[language].farmersMarket}</h1>
         </div>
         <div className="flex items-center space-x-4">
           <motion.button
             onClick={() => setShowSettings(!showSettings)}
-            className="p-2 bg-white rounded-full hover:bg-gray-100"
+            className="p-2 bg-white/10 rounded-full hover:bg-white/20"
             whileHover={{ scale: 1.1 }}
           >
-            <Settings className="w-6 h-6 text-teal-600" />
-          </motion.button>
-          <motion.button className="p-2 bg-white rounded-full hover:bg-gray-100" whileHover={{ scale: 1.1 }}>
-            <User className="w-6 h-6 text-green-600" />
+            <Settings className="w-6 h-6 text-white" />
           </motion.button>
           <motion.button
             onClick={() => navigate("/dashboard")}
-            className="p-2 bg-white rounded-full hover:bg-gray-100"
+            className="p-2 bg-white/10 rounded-full hover:bg-white/20"
             whileHover={{ scale: 1.1 }}
           >
-            <LogOut className="w-6 h-6 text-red-600" />
+            <LogOut className="w-6 h-6 text-white" />
           </motion.button>
         </div>
       </motion.header>
 
       {showSettings && (
         <motion.div
-          className="absolute top-20 right-6 p-4 bg-white rounded-2xl shadow-xl z-10"
+          className="absolute top-20 right-6 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-xl z-10"
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
         >
           <div className="space-y-3">
             <div>
-              <p className="font-semibold text-gray-800">{farmerInfo.name}</p>
-              <p className="text-sm text-gray-600">{farmerInfo.email}</p>
+              <p className="font-semibold text-teal-800 dark:text-teal-200">{farmerInfo.name}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-300">{farmerInfo.email}</p>
             </div>
             <select
               value={language}
               onChange={(e) => setLanguage(e.target.value)}
-              className="w-full p-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-teal-400"
+              className="w-full p-2 rounded-lg border border-teal-200 dark:border-teal-600 bg-white dark:bg-gray-700 text-black dark:text-white"
             >
               <option value="English">English</option>
-              <option value="Tamil">தமிழ்</option>
+              <option value="தமிழ்">தமிழ் (Tamil)</option>
+              <option value="हिन्दी">हिन्दी (Hindi)</option>
             </select>
             <button
               onClick={() => setDarkMode(!darkMode)}
@@ -326,10 +410,10 @@ const ProductSelection = () => {
         <div className="flex items-center space-x-4 mb-6">
           <input
             type="text"
-            placeholder={language === "English" ? "Search products..." : "தயாரிப்புகளைத் தேடு..."}
+            placeholder={translations[language].searchProducts}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="flex-1 p-3 rounded-lg border border-gray-300 bg-white focus:ring-2 focus:ring-teal-400 focus:outline-none"
+            className="flex-1 p-3 rounded-lg border border-teal-300 dark:border-teal-600 bg-white dark:bg-gray-800 text-black dark:text-white focus:ring-2 focus:ring-teal-400 focus:outline-none"
           />
           <motion.button
             onClick={() => setIsListening(!isListening)}
@@ -341,21 +425,22 @@ const ProductSelection = () => {
           </motion.button>
         </div>
 
-        <motion.div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 mb-8" variants={containerVariants}>
-          {filteredProducts.map((product) => (
+        {/* Display all products directly */}
+        <motion.div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 mb-8" variants={containerVariants}>
+          {allProducts.map((product) => (
             <motion.div
               key={product.id}
               variants={itemVariants}
               onClick={() => toggleSelection(product)}
-              className={`p-4 bg-white rounded-2xl shadow-md hover:shadow-xl cursor-pointer border-2 ${
+              className={`p-4 bg-white dark:bg-gray-800 rounded-xl shadow-md hover:shadow-lg transition-all cursor-pointer border-2 ${
                 selectedProducts.some((p) => p.id === product.id) ? "border-teal-500" : "border-transparent"
               }`}
             >
               <img src={product.image} alt={product.name} className="w-full h-40 object-cover rounded-lg mb-3" />
-              <h3 className="text-lg font-semibold text-teal-800">
-                {language === "English" ? product.name : product.tamilName}
+              <h3 className="text-lg font-semibold text-teal-800 dark:text-teal-200">
+                {language === "English" ? product.name : language === "தமிழ்" ? product.tamilName : product.hindiName}
               </h3>
-              <p className="text-sm text-gray-600">{product.weight}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-300">{product.weight}</p>
             </motion.div>
           ))}
         </motion.div>
@@ -363,83 +448,70 @@ const ProductSelection = () => {
         {selectedProducts.length > 0 && (
           <motion.button
             onClick={addToBill}
-            className="w-full max-w-xs mx-auto block p-3 bg-teal-600 text-white rounded-lg hover:bg-teal-700 shadow-md"
+            className="fixed bottom-10 right-10 p-4 bg-teal-600 text-white rounded-full shadow-lg hover:bg-teal-700 z-20 flex items-center space-x-2"
             variants={itemVariants}
-            whileHover={{ scale: 1.05 }}
+            whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.95 }}
           >
-            {language === "English" ? "Add Products" : "பில் சேர்"}
+            <Plus className="w-6 h-6" />
+            <span>{translations[language].addSelectedProducts}</span>
           </motion.button>
         )}
 
         {billList.length > 0 && (
-          <motion.div className="mt-8 p-6 bg-white rounded-2xl shadow-lg" variants={containerVariants}>
-            <h2 className="text-2xl font-bold text-teal-800 mb-4">
-              {language === "English" ? "Your Bill" : "உங்கள் பில்"}
-            </h2>
-            {Object.keys(categorizedBill).map((category) =>
+          <motion.div className="mt-8 p-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg" variants={containerVariants}>
+            <h2 className="text-2xl font-bold text-teal-800 dark:text-teal-200 mb-4">{translations[language].yourBill}</h2>
+            {["Vegetables", "Fruits", "Seeds", "Dairy Products", "Herbs", "Fertilizers"].map((category) =>
               categorizedBill[category].length > 0 && (
                 <div key={category} className="mb-6">
-                  <h3 className="text-xl font-semibold text-teal-700">
-                    {language === "English"
-                      ? category
-                      : {
-                          Vegetables: "காய்கறிகள்",
-                          Fruits: "பழங்கள்",
-                          Seeds: "விதைகள்",
-                          "Dairy Products": "பால் பொருட்கள்",
-                          Herbs: "மூலிகைகள்",
-                          Fertilizers: "உரங்கள்",
-                        }[category]}
-                  </h3>
+                  <h3 className="text-xl font-semibold text-teal-700 dark:text-teal-300">{translations[language][category.toLowerCase()]}</h3>
                   {categorizedBill[category].map((item) => (
                     <motion.div
                       key={item.id}
-                      className="flex items-center justify-between p-4 border-b border-gray-100"
+                      className="flex items-center justify-between p-4 border-b border-teal-100 dark:border-teal-700"
                       variants={itemVariants}
                     >
                       <div className="flex items-center space-x-4">
-                        <img src={item.image} alt={item.name} className="w-16 h-16 rounded-lg object-cover" />
+                        <img src={item.image} alt={item.name} className="w-16 h-16 rounded-lg" />
                         <div>
-                          <p className="font-medium text-teal-800">
-                            {language === "English" ? item.name : item.tamilName}
+                          <p className="font-medium text-teal-800 dark:text-teal-200">
+                            {language === "English" ? item.name : language === "தமிழ்" ? item.tamilName : item.hindiName}
                           </p>
-                          <p className="text-sm text-gray-600">{item.weight}</p>
+                          <p className="text-sm text-gray-600 dark:text-gray-300">{item.weight}</p>
                         </div>
                       </div>
                       <div className="flex items-center space-x-4">
                         <input
                           type="number"
                           value={item.qty}
-                          onChange={(e) => updateQuantity(item.id, parseInt(e.target.value) || 1)}
-                          className="w-16 p-2 rounded-lg border border-gray-300 text-center"
-                          min="1"
+                          onChange={(e) => updateQuantity(item.id, e.target.value)}
+                          className="w-16 p-2 rounded-lg border border-teal-300 dark:border-teal-600 bg-white dark:bg-gray-700 text-black dark:text-white focus:ring-2 focus:ring-teal-400 focus:outline-none"
+                          min="0"
+                          placeholder="Qty"
                         />
                         <input
                           type="number"
-                          placeholder="Set Price"
                           value={item.customPrice}
                           onChange={(e) => updateCustomPrice(item.id, e.target.value)}
-                          className="w-20 p-2 rounded-lg border border-gray-300 text-center"
+                          className="w-20 p-2 rounded-lg border border-teal-300 dark:border-teal-600 bg-white dark:bg-gray-700 text-black dark:text-white focus:ring-2 focus:ring-teal-400 focus:outline-none"
                           min="0"
+                          placeholder="Price"
                         />
-                        <p className="text-teal-700 font-medium">₹{item.finalPrice.toFixed(2)}</p>
-                        <button onClick={() => removeItem(item.id)} className="text-red-600 hover:text-red-800">
+                        <p className="text-teal-700 dark:text-teal-300 font-medium">₹{item.finalPrice.toFixed(2)}</p>
+                        <button onClick={() => removeItem(item.id)} className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300">
                           ✕
                         </button>
                       </div>
                     </motion.div>
                   ))}
-                  <p className="text-right font-semibold text-teal-800 mt-2">
-                    {language === "English" ? "Subtotal" : "துணை மொத்தம்"}: ₹{categorizedBill[category]
-                      .reduce((sum, item) => sum + Number(item.finalPrice), 0)
-                      .toFixed(2)}
+                  <p className="text-right font-semibold text-teal-800 dark:text-teal-200 mt-2">
+                    {translations[language].subtotal}: ₹{categorizedBill[category].reduce((sum, item) => sum + Number(item.finalPrice), 0).toFixed(2)}
                   </p>
                 </div>
               )
             )}
-            <p className="text-2xl font-bold text-teal-800 text-right">
-              {language === "English" ? "Total" : "மொத்தம்"}: ₹{totalAmount.toFixed(2)}
+            <p className="text-2xl font-bold text-teal-800 dark:text-teal-200 text-right">
+              {translations[language].total}: ₹{totalAmount.toFixed(2)}
             </p>
             <motion.button
               onClick={handleSaveProducts}
@@ -449,17 +521,35 @@ const ProductSelection = () => {
               whileHover={{ scale: loading ? 1 : 1.05 }}
               whileTap={{ scale: loading ? 1 : 0.95 }}
             >
-              {loading
-                ? (language === "English" ? "Saving..." : "சேமிக்கிறது...")
-                : (language === "English" ? "Save to Products" : "தயாரிப்புகளாக சேமி")}
+              {loading ? translations[language].saving : translations[language].saveToProducts}
             </motion.button>
             {error && (
-              <motion.p className="text-red-600 mt-2 text-center" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <motion.p className="text-red-600 dark:text-red-400 mt-2 text-center" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                 {error}
               </motion.p>
             )}
           </motion.div>
         )}
+
+        <motion.div className="mt-10 p-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg" variants={containerVariants}>
+          <h2 className="text-xl font-bold text-teal-800 dark:text-teal-200 mb-4">{translations[language].disputeSection}</h2>
+          <input
+            type="text"
+            value={newDispute}
+            onChange={(e) => setNewDispute(e.target.value)}
+            placeholder={translations[language].replyToQuery}
+            className="w-full p-3 rounded-lg border border-teal-300 dark:border-teal-600 bg-white dark:bg-gray-700 text-black dark:text-white focus:ring-2 focus:ring-teal-400 focus:outline-none"
+          />
+          <button
+            onClick={addDispute}
+            className="w-full p-3 mt-4 bg-teal-600 text-white rounded-lg hover:bg-teal-700 shadow-md"
+          >
+            {translations[language].submit}
+          </button>
+          {disputes.map((dispute, index) => (
+            <p key={index} className="mt-2 text-teal-700 dark:text-teal-300">{dispute}</p>
+          ))}
+        </motion.div>
       </motion.div>
     </motion.div>
   );

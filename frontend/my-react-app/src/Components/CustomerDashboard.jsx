@@ -136,10 +136,17 @@ const CustomerDashboard = () => {
       toast.error('Failed to fetch payment methods.');
     });
 
-    const ordersRef = ref(db, `customerOrders/${uid}`);
+    const ordersRef = ref(db, `orders`);
     onValue(ordersRef, (snapshot) => {
       const data = snapshot.val();
-      setOrders(data ? Object.values(data) : []);
+      if (data) {
+        const userOrders = Object.entries(data)
+          .filter(([key]) => key.startsWith(`order_${uid}_`))
+          .map(([_, order]) => order);
+        setOrders(userOrders);
+      } else {
+        setOrders([]);
+      }
     }, (error) => {
       console.error('Error fetching orders:', error);
       toast.error('Failed to fetch orders.');
@@ -341,7 +348,7 @@ const CustomerDashboard = () => {
 
     const orderId = Date.now();
     const orderDate = new Date().toISOString();
-    const ordersRef = ref(db, `customerOrders/${uid}/${orderId}`);
+    const ordersRef = ref(db, `orders/order_${uid}_${orderId}`);
 
     const selectedAddress = addresses.find((addr) => addr.id === parseInt(orderDetails.address));
     const selectedPaymentMethod = paymentMethods.find((pm) => pm.id === parseInt(orderDetails.paymentMethod));
@@ -352,25 +359,28 @@ const CustomerDashboard = () => {
     }
 
     const order = {
-      id: orderId,
+      orderId: `order_${uid}_${orderId}`,
+      orderDateTime: orderDate,
+      customerId: uid,
+      customerName: customer.name,
       products: cart.map((item) => ({
         productName: item.name,
         productId: item.id,
-        price: item.price,
-        quantity: item.qty,
-        category: item.category,
-        orderDate,
-        farmerName: item.farmerName,
         farmerId: item.farmerId,
-        hindiName: item.hindiName,
-        tamilName: item.tamilName,
-        image: item.image,
+        quantity: item.qty,
+        price: item.price,
+        totalPrice: item.qty * item.price,
       })),
-      address: selectedAddress,
-      paymentMethod: selectedPaymentMethod,
-      status: 'Successful', // Changed from 'Pending' to 'Successful'
       totalAmount: totalAmount,
-      createdAt: orderDate,
+      paymentMethod: {
+        type: selectedPaymentMethod.type,
+        value: selectedPaymentMethod.value,
+      },
+      address: {
+        type: selectedAddress.type,
+        details: selectedAddress.details,
+      },
+      status: 'Pending', // Initial status
     };
 
     set(ordersRef, order)
@@ -728,11 +738,13 @@ const CustomerDashboard = () => {
                 <p className="text-gray-600 dark:text-gray-400">No orders yet.</p>
               ) : (
                 orders.map((order) => (
-                  <motion.div key={order.id} whileHover={{ scale: 1.05 }} className="p-4 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
+                  <motion.div key={order.orderId} whileHover={{ scale: 1.05 }} className="p-4 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
                     <p className="text-gray-800 dark:text-teal-300 font-semibold">{order.products.map((p) => p.productName).join(', ')}</p>
                     <p className="text-gray-600 dark:text-gray-400">Total: ₹{order.totalAmount.toFixed(2)}</p>
                     <p className="text-gray-600 dark:text-gray-400">Status: {order.status}</p>
-                    <p className="text-gray-600 dark:text-gray-400">Date: {new Date(order.createdAt).toLocaleString()}</p>
+                    <p className="text-gray-600 dark:text-gray-400">Date: {new Date(order.orderDateTime).toLocaleString()}</p>
+                    <p className="text-gray-600 dark:text-gray-400">Address: {order.address.type} - {order.address.details}</p>
+                    <p className="text-gray-600 dark:text-gray-400">Payment: {order.paymentMethod.type} - {order.paymentMethod.value}</p>
                   </motion.div>
                 ))
               )}

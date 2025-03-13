@@ -15,19 +15,6 @@ import { auth } from "./firebase.js"; // Import Firebase auth
 function App() {
   const [isAuthenticated, setAuth] = useState(false);
 
-  // Sync isAuthenticated with Firebase auth state on mount
-  useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      if (user) {
-        console.log("App: User authenticated on mount, UID:", user.uid);
-        setAuth(true);
-      } else {
-        console.log("App: No user authenticated on mount");
-        setAuth(false);
-      }
-    });
-    return () => unsubscribe(); // Cleanup subscription
-  }, []);
 
   return (
     <Router>

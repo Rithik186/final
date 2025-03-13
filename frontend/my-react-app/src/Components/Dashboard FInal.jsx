@@ -306,6 +306,7 @@ const Dashboard = () => {
       setError(null);
       setFarmerId(user.uid);
 
+      // Fetch user details
       const userRef = ref(db, `users/${user.uid}`);
       onValue(
         userRef,
@@ -322,35 +323,38 @@ const Dashboard = () => {
         (err) => {
           console.error("User fetch error:", err);
           setError("Failed to fetch user data.");
+          setProfilePic("https://via.placeholder.com/150"); // Fallback for profile picture
         }
       );
 
-      const productsRef = ref(db, "products");
+      // Fetch products for this farmer
+      const farmerProductRef = ref(db, `products/farmer_${user.uid}`);
       onValue(
-        productsRef,
+        farmerProductRef,
         (snapshot) => {
           if (snapshot.exists()) {
             const productsData = snapshot.val();
-            const farmerProducts = Object.entries(productsData)
-              .filter(([_, product]) => product.farmerId === `farmer_${user.uid}`)
-              .map(([id, product]) => ({
-                id,
-                name: product.name,
-                price: product.price,
-                stock: product.quantity,
-                image: product.image || "https://via.placeholder.com/150",
-              }));
+            const farmerProducts = Object.entries(productsData).map(([id, product]) => ({
+              id,
+              name: product.name || "Unknown Product",
+              price: product.price || 0,
+              stock: product.quantity || product.stock || 0,
+              image: product.image || "https://via.placeholder.com/150",
+            }));
             setProducts(farmerProducts);
           } else {
             setProducts([]);
           }
+          setLoading(false);
         },
         (err) => {
           console.error("Products fetch error:", err);
           setError("Failed to fetch products.");
+          setLoading(false);
         }
       );
 
+      // Fetch orders
       const ordersRef = ref(db, "orders");
       onValue(
         ordersRef,
@@ -358,22 +362,31 @@ const Dashboard = () => {
           if (snapshot.exists()) {
             const ordersData = snapshot.val();
             const farmerOrders = Object.entries(ordersData)
-              .filter(([_, order]) => order.products.some((p) => p.farmerId === `farmer_${user.uid}`))
+              .filter(([_, order]) => {
+                // Filter orders that contain products from this farmer
+                return order.products && Array.isArray(order.products) && order.products.some((p) => p.farmerId === `farmer_${user.uid}`);
+              })
               .map(([id, order]) => {
+                // Filter products in this order that belong to the farmer
                 const farmerProducts = order.products.filter((p) => p.farmerId === `farmer_${user.uid}`);
-                const farmerTotal = farmerProducts.reduce((sum, p) => sum + p.totalPrice, 0);
+                const farmerTotal = farmerProducts.reduce((sum, p) => sum + (p.totalPrice || 0), 0);
+
+                // Map "Success" status to "Completed" for consistency
+                const status = order.status === "Success" ? "Completed" : order.status || "Unknown";
+
                 return {
                   id: order.orderId || id,
-                  status: order.status,
+                  status: status,
                   totalAmount: farmerTotal,
-                  date: order.orderDateTime,
+                  date: order.orderDateTime || order.date || new Date().toISOString(),
                   products: farmerProducts,
-                  customerName: order.customerName,
+                  customerName: order.customerName || "Unknown Customer",
                 };
               });
-            console.log("Fetched farmer orders:", farmerOrders);
+
             setOrders(farmerOrders);
 
+            // Calculate total earnings from completed orders
             const totalEarnings = farmerOrders
               .filter((order) => order.status === "Completed")
               .reduce((sum, order) => sum + order.totalAmount, 0);
@@ -382,26 +395,39 @@ const Dashboard = () => {
             setOrders([]);
             setEarnings(0);
           }
-          setLoading(false);
         },
         (err) => {
           console.error("Orders fetch error:", err);
           setError("Failed to fetch orders.");
-          setLoading(false);
         }
       );
 
+      // Fetch weather data
       const fetchWeather = async (lat, lon) => {
         const apiKey = "ccd8b058961d7fefa87f1c29421d8bdf";
         const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`;
-        const response = await fetch(url);
-        const data = await response.json();
-        setWeather({
-          main: { temp: data.main.temp, humidity: data.main.humidity },
-          weather: [{ description: data.weather[0].description }],
-          name: data.name,
-          country: data.sys.country,
-        });
+        try {
+          const response = await fetch(url);
+          const data = await response.json();
+          if (data.cod === 200) {
+            setWeather({
+              main: { temp: data.main.temp, humidity: data.main.humidity },
+              weather: [{ description: data.weather[0].description }],
+              name: data.name,
+              country: data.sys.country,
+            });
+          } else {
+            throw new Error(data.message || "Failed to fetch weather data");
+          }
+        } catch (err) {
+          console.error("Weather fetch error:", err);
+          setWeather({
+            main: { temp: 34.81, humidity: 24 },
+            weather: [{ description: "broken clouds" }],
+            name: "Sulur",
+            country: "IN",
+          });
+        }
       };
 
       if (navigator.geolocation) {
@@ -417,12 +443,20 @@ const Dashboard = () => {
             });
           }
         );
+      } else {
+        setWeather({
+          main: { temp: 34.81, humidity: 24 },
+          weather: [{ description: "broken clouds" }],
+          name: "Sulur",
+          country: "IN",
+        });
       }
     });
 
     return () => unsubscribe();
   }, [navigate, db]);
 
+  // Process orders for the Orders Graph (only for Completed orders)
   const ordersByMonth = orders.reduce((acc, order) => {
     if (order.status === "Completed" && order.date) {
       const month = new Date(order.date).toLocaleString("default", { month: "short" });
@@ -435,7 +469,7 @@ const Dashboard = () => {
     labels: Object.keys(ordersByMonth).length ? Object.keys(ordersByMonth) : ["No Data"],
     datasets: [
       {
-        label: translations[language]?.ordersGraph || "Orders Graph", // Fallback
+        label: translations[language]?.ordersGraph || "Orders Graph",
         data: Object.keys(ordersByMonth).length ? Object.values(ordersByMonth) : [0],
         backgroundColor: "rgba(34, 197, 94, 0.6)",
         borderColor: "rgba(34, 197, 94, 1)",
@@ -451,7 +485,7 @@ const Dashboard = () => {
       legend: { position: "top", labels: { color: darkMode ? "#e5e7eb" : "#000000", font: { size: 10 } } },
       title: {
         display: true,
-        text: translations[language]?.ordersGraph || "Orders Graph", // Fallback
+        text: translations[language]?.ordersGraph || "Orders Graph",
         color: darkMode ? "#e5e7eb" : "#000000",
         font: { size: 14 },
       },
@@ -523,23 +557,24 @@ const Dashboard = () => {
     }
   };
 
+  const handleWithdrawClick = (product) => {
+    setSelectedProduct(product);
+    setShowWithdrawModal(true);
+  };
+
   const withdrawProduct = async (productId) => {
     try {
-      const productRef = ref(db, `products/${productId}`);
+      const productRef = ref(db, `products/farmer_${farmerId}/${productId}`);
       await remove(productRef);
-      setProducts(products.filter((product) => product.id !== productId));
+      setProducts((prevProducts) => prevProducts.filter((product) => product.id !== productId));
       setShowWithdrawModal(false);
       setSelectedProduct(null);
       alert("Product withdrawn successfully!");
     } catch (err) {
       console.error("Error withdrawing product:", err);
       setError("Failed to withdraw product.");
+      alert("Failed to withdraw product. Please try again.");
     }
-  };
-
-  const handleWithdrawClick = (product) => {
-    setSelectedProduct(product);
-    setShowWithdrawModal(true);
   };
 
   const handleSendMessage = () => {
@@ -635,12 +670,15 @@ const Dashboard = () => {
               <h3 className={`font-semibold text-xl ${status === "confirmed" ? "text-green-600" : status === "dispatched" ? "text-yellow-600" : "text-red-600"}`}>
                 {translations[language][status]}
               </h3>
-              {orders.filter((o) => o.status.toLowerCase() === status).slice(0, 2).map((order, idx) => (
-                <p key={idx} className={`mt-3 text-base ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
-                  Order #{order.id.split("_")[2]} - ₹{order.totalAmount} (To: {order.customerName})
-                </p>
-              ))}
-              {orders.filter((o) => o.status.toLowerCase() === status).length === 0 && (
+              {orders
+                .filter((o) => o.status.toLowerCase() === status.toLowerCase())
+                .slice(0, 2)
+                .map((order, idx) => (
+                  <p key={idx} className={`mt-3 text-base ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
+                    Order #{order.id.split("_")[1] || order.id} - ₹{order.totalAmount} (To: {order.customerName})
+                  </p>
+                ))}
+              {orders.filter((o) => o.status.toLowerCase() === status.toLowerCase()).length === 0 && (
                 <p className={`mt-3 text-base ${darkMode ? "text-gray-300" : "text-gray-700"}`}>No {status} orders</p>
               )}
             </motion.div>
@@ -678,11 +716,14 @@ const Dashboard = () => {
 
           <motion.div className={`p-6 rounded-xl shadow-lg border current-orders ${darkMode ? "bg-gray-800" : "bg-white"}`} whileHover={glossyHover}>
             <h3 className="font-semibold text-xl text-green-600">{translations[language].currentOrders}</h3>
-            {orders.filter((o) => ["Pending", "Confirmed", "Processing", "Dispatched"].includes(o.status)).slice(0, 2).map((order, idx) => (
-              <p key={idx} className={`mt-3 text-base ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
-                Order #{order.id.split("_")[2]} - ₹{order.totalAmount} ({order.status})
-              </p>
-            ))}
+            {orders
+              .filter((o) => ["Pending", "Confirmed", "Processing", "Dispatched"].includes(o.status))
+              .slice(0, 2)
+              .map((order, idx) => (
+                <p key={idx} className={`mt-3 text-base ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
+                  Order #{order.id.split("_")[1] || order.id} - ₹{order.totalAmount} ({order.status})
+                </p>
+              ))}
             {orders.filter((o) => ["Pending", "Confirmed", "Processing", "Dispatched"].includes(o.status)).length === 0 && (
               <p className={`mt-3 text-base ${darkMode ? "text-gray-300" : "text-gray-700"}`}>No current orders</p>
             )}
@@ -690,11 +731,14 @@ const Dashboard = () => {
 
           <motion.div className={`p-6 rounded-xl shadow-lg border previous-orders ${darkMode ? "bg-gray-800" : "bg-white"}`} whileHover={glossyHover}>
             <h3 className="font-semibold text-xl text-yellow-600">{translations[language].previousOrders}</h3>
-            {orders.filter((o) => ["Completed", "Cancelled"].includes(o.status)).slice(0, 2).map((order, idx) => (
-              <p key={idx} className={`mt-3 text-base ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
-                Order #{order.id.split("_")[2]} - ₹{order.totalAmount} ({order.status})
-              </p>
-            ))}
+            {orders
+              .filter((o) => ["Completed", "Cancelled"].includes(o.status))
+              .slice(0, 2)
+              .map((order, idx) => (
+                <p key={idx} className={`mt-3 text-base ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
+                  Order #{order.id.split("_")[1] || order.id} - ₹{order.totalAmount} ({order.status})
+                </p>
+              ))}
             {orders.filter((o) => ["Completed", "Cancelled"].includes(o.status)).length === 0 && (
               <p className={`mt-3 text-base ${darkMode ? "text-gray-300" : "text-gray-700"}`}>No previous orders</p>
             )}
@@ -733,22 +777,37 @@ const Dashboard = () => {
             </div>
           </motion.div>
 
-          <motion.div className={`p-6 rounded-xl shadow-lg border your-products ${darkMode ? "bg-gray-800" : "bg-white"}`} whileHover={glossyHover}>
+          <motion.div
+            className={`p-6 rounded-xl shadow-lg border your-products ${darkMode ? "bg-gray-800" : "bg-white"}`}
+            whileHover={glossyHover}
+          >
             <h3 className="font-semibold text-xl text-teal-600">{translations[language].yourProducts}</h3>
             {products.length === 0 ? (
               <p className="mt-4 text-base text-gray-500">
-                No products available. <Link to="/addproducts" className="text-teal-600 font-medium">{translations[language].addProduct}</Link>
+                No products available.{" "}
+                <Link to="/addproducts" className="text-teal-600 font-medium">
+                  {translations[language].addProduct}
+                </Link>
               </p>
             ) : (
               <div className="grid grid-cols-2 gap-4 mt-4">
                 {products.map((product) => (
-                  <motion.div key={product.id} whileHover={{ scale: 1.05 }} className="p-3 rounded-lg bg-teal-50">
-                    <img src={product.image} alt={product.name} className="w-20 h-20 object-cover rounded-lg mx-auto" />
-                    <p className="text-base font-medium mt-2">{product.name}</p>
-                    <p className="text-sm text-gray-600">₹{product.price}/kg</p>
-                    <p className="text-sm text-gray-500">{product.stock} kg available</p>
+                  <motion.div
+                    key={product.id}
+                    whileHover={{ scale: 1.05 }}
+                    className="p-3 rounded-lg bg-teal-50"
+                  >
+                    <img
+                      src={product.image}
+                      alt={product.name}
+                      className="w-20 h-20 object-cover rounded-lg mx-auto"
+                      onError={(e) => (e.target.src = "https://via.placeholder.com/150")}
+                    />
+                    <p className="text-base font-medium mt-2 text-center">{product.name}</p>
+                    <p className="text-sm text-gray-600 text-center">₹{product.price}/kg</p>
+                    <p className="text-sm text-gray-500 text-center">{product.stock} kg available</p>
                     <button
-                      className="mt-2 px-3 py-1 bg-orange-500 text-white rounded-lg text-sm hover:bg-orange-600"
+                      className="mt-2 w-full px-3 py-1 bg-orange-500 text-white rounded-lg text-sm hover:bg-orange-600"
                       onClick={() => handleWithdrawClick(product)}
                     >
                       {translations[language].withdrawProduct}
@@ -894,13 +953,21 @@ const Dashboard = () => {
       )}
 
       {!showGuide && (
-        <motion.div className={`fixed bottom-6 right-6 p-4 ${darkMode ? "bg-gray-800 text-gray-200 border-gray-700" : "bg-white text-gray-800 border-gray-200"} rounded-xl shadow-lg border`}>
+        <motion.div
+          className={`fixed bottom-6 right-6 p-4 ${darkMode ? "bg-gray-800 text-gray-200 border-gray-700" : "bg-white text-gray-800 border-gray-200"} rounded-xl shadow-lg border`}
+        >
           <p className="text-base font-medium">{translations[language].newToDashboard}</p>
           <div className="flex space-x-3 mt-3">
-            <button className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm font-medium" onClick={() => setShowGuide(true)}>
+            <button
+              className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm font-medium"
+              onClick={() => setShowGuide(true)}
+            >
               {translations[language].yes}
             </button>
-            <button className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-sm font-medium" onClick={() => setShowGuide(false)}>
+            <button
+              className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-sm font-medium"
+              onClick={() => setShowGuide(false)}
+            >
               {translations[language].no}
             </button>
           </div>
@@ -912,7 +979,12 @@ const Dashboard = () => {
           <div className="relative pointer-events-auto">
             <motion.div
               className={`absolute p-4 ${darkMode ? "bg-gray-800 text-gray-200 border-gray-700" : "bg-white text-gray-800 border-gray-200"} rounded-xl shadow-lg border z-40`}
-              style={{ top: (document.querySelector(guideSteps[guideStep].target)?.getBoundingClientRect().top || 0) - 140 + window.scrollY, left: "50%", transform: "translateX(-50%)", width: "320px" }}
+              style={{
+                top: (document.querySelector(guideSteps[guideStep].target)?.getBoundingClientRect().top || 0) - 140 + window.scrollY,
+                left: "50%",
+                transform: "translateX(-50%)",
+                width: "320px",
+              }}
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
             >
@@ -920,16 +992,22 @@ const Dashboard = () => {
               <div className="flex space-x-3">
                 <button
                   className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm font-medium"
-                  onClick={() => guideStep < guideSteps.length - 1 ? setGuideStep((prev) => prev + 1) : setShowGuide(false)}
+                  onClick={() => (guideStep < guideSteps.length - 1 ? setGuideStep((prev) => prev + 1) : setShowGuide(false))}
                 >
                   {guideStep < guideSteps.length - 1 ? translations[language].next : translations[language].finish}
                 </button>
                 {guideStep > 0 && (
-                  <button className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-sm font-medium" onClick={() => setGuideStep((prev) => prev - 1)}>
+                  <button
+                    className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-sm font-medium"
+                    onClick={() => setGuideStep((prev) => prev - 1)}
+                  >
                     Back
                   </button>
                 )}
-                <button className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 text-sm font-medium" onClick={() => setShowGuide(false)}>
+                <button
+                  className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 text-sm font-medium"
+                  onClick={() => setShowGuide(false)}
+                >
                   Close
                 </button>
               </div>

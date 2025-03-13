@@ -31,20 +31,6 @@ const LoginFar = ({ setAuth }) => {
   const toggleConfirmPasswordVisibility = () => setShowConfirmPassword(!showConfirmPassword);
 
   // Check auth state only on mount, but don’t redirect unless explicitly logging in
-  useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      if (user && !loading) {
-        // User is already logged in, but don’t redirect yet
-        console.log("User already authenticated on mount, UID:", user.uid);
-        setAuth(true); // Set auth state, but let routing handle navigation
-      } else if (!user) {
-        console.log("No user authenticated on mount");
-        setAuth(false);
-        navigate("/login"); // Ensure we stay on login page if not authenticated
-      }
-    });
-    return () => unsubscribe();
-  }, [navigate, setAuth]);
 
   const checkUserRoleAndNavigate = async (user) => {
     try {

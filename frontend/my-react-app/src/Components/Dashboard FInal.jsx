@@ -328,7 +328,7 @@ const Dashboard = () => {
                   console.log(`Product Total: ${total}`); // Log each product total
                   return sum + total;
                 }, 0);
-                const status = order.status === "Success" ? "Completed" : order.status || "Unknown";
+                const status = order.status === "Confirmed" ? "Dispatched" : order.status || "Unknown";
                 console.log(`Order ${id}: Status=${status}, Total=${farmerTotal}`); // Log order details
                 
                 return {
@@ -347,7 +347,7 @@ const Dashboard = () => {
             
             // More robust earnings calculation
             const completedOrders = farmerOrders.filter(order => {
-              const isCompleted = order.status === "Completed";
+              const isCompleted = order.status === "Dispatched";
               console.log(`Order ${order.id} Completed Check: ${isCompleted}`);
               return isCompleted;
             });
@@ -503,7 +503,7 @@ const Dashboard = () => {
 
   // Orders graph data
   const ordersByMonth = orders.reduce((acc, order) => {
-    if (order.status === "Completed" && order.date) {
+    if (order.status === "Dispatched" && order.date) {
       const date = new Date(order.date);
       if (!isNaN(date.getTime())) { // Ensure date is valid
         const month = date.toLocaleString("default", { month: "short", year: "numeric" });

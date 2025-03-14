@@ -5,7 +5,7 @@ import { Mic, Settings, LogOut, Plus } from "lucide-react";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { auth } from "../firebase.js"; // Firebase Auth
-import { getDatabase, ref, onValue, push, set } from "firebase/database"; // Firebase Realtime Database
+import { getDatabase, ref, onValue, push, set, update } from "firebase/database"; // Firebase Realtime Database
 
 const ProductSelection = () => {
   const navigate = useNavigate();
@@ -251,20 +251,22 @@ const ProductSelection = () => {
 
       const productsToSave = billList.map((item) => {
         const price = Number(item.customPrice);
-        if (isNaN(price) || price <= 0) {
-          throw new Error("All products must have a valid price greater than 0.");
+        const stock = Number(item.qty); // Stock is the quantity set by the farmer
+        if (isNaN(price) || price <= 0 || isNaN(stock) || stock <= 0) {
+          throw new Error("All products must have a valid price and stock greater than 0.");
         }
         return {
           name: item.name,
           tamilName: item.tamilName,
           hindiName: item.hindiName || item.name,
-          quantity: item.qty,
+          quantity: stock, // Initial stock set by farmer
           price,
           category: item.category,
           image: item.image,
           farmerId: user.uid,
           farmerName: farmerInfo.name,
           createdAt: new Date().toISOString(),
+          availableStock: stock, // Track available stock separately
         };
       });
 

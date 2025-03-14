@@ -334,9 +334,9 @@ const Home = () => {
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
             {[
-              { quote: 'Fresh produce like never before! The quality is unmatched.', name: 'Voice Based Purchase' },
-              { quote: 'Love the transparency with blockchain! It’s a game-changer.', name: 'Multi Language Support' },
-              { quote: 'The best way to support farmers while eating healthy!', name: 'Surf Across Various Farmers' },
+              { quote: 'From command to checkout in seconds—experience the convenience of voice commerce.', name: 'Voice Based Purchase' },
+              { quote: 'Your words, your way—communicate effortlessly in your language.', name: 'Multi Language Support' },
+              { quote: '', name: 'Surf Across Various Farmers' },
             ].map((testimonial, index) => (
               <motion.div
                 key={testimonial.name}

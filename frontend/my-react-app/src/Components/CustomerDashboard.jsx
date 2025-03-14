@@ -29,9 +29,9 @@ const CustomerDashboard = () => {
   const [orderDetails, setOrderDetails] = useState({ address: '', paymentMethod: '' });
 
   const translations = {
-    English: { home: 'Home', profile: 'Profile', orders: 'Orders', wishlist: 'Wishlist', address: 'Address', payment: 'Payment Methods', logout: 'Logout', addToCart: 'Add to Cart', placeOrder: 'Place Order', search: 'Search products...', saveToWishlist: 'Save to Wishlist', confirmOrder: 'Confirm Purchase' },
-    Tamil: { home: 'முகப்பு', profile: 'சுயவிவரம்', orders: 'ஆர்டர்கள்', wishlist: 'விருப்பப்பட்டியல்', address: 'முகவரி', payment: 'பணம் செலுத்தும் முறைகள்', logout: 'வெளியேறு', addToCart: 'கார்ட்டில் சேர்', placeOrder: 'ஆர்டர் செய்', search: 'பொருட்களைத் தேடு...', saveToWishlist: 'விருப்பப்பட்டியலில் சேமி', confirmOrder: 'வாங்குதலை உறுதிப்படுத்து' },
-    Hindi: { home: 'होम', profile: 'प्रोफाइल', orders: 'ऑर्डर', wishlist: 'विशलिस्ट', address: 'पता', payment: 'भुगतान के तरीके', logout: 'लॉगआउट', addToCart: 'कार्ट में जोड़ें', placeOrder: 'ऑर्डर करें', search: 'उत्पाद खोजें...', saveToWishlist: 'विशलिस्ट में सहेजें', confirmOrder: 'खरीद की पुष्टि करें' },
+    English: { home: 'Home', profile: 'Profile', orders: 'Orders', wishlist: 'Wishlist', address: 'Address', payment: 'Payment Methods', logout: 'Logout', addToCart: 'Add to Cart', placeOrder: 'Place Order', search: 'Search products...', saveToWishlist: 'Save to Wishlist', confirmOrder: 'Confirm Purchase', stock: 'Available Stock', orderStatus: { confirmed: 'Confirmed', cancelled: 'Cancelled', dispatched: 'Dispatched', current: 'Current' } },
+    Tamil: { home: 'முகப்பு', profile: 'சுயவிவரம்', orders: 'ஆர்டர்கள்', wishlist: 'விருப்பப்பட்டியல்', address: 'முகவரி', payment: 'பணம் செலுத்தும் முறைகள்', logout: 'வெளியேறு', addToCart: 'கார்ட்டில் சேர்', placeOrder: 'ஆர்டர் செய்', search: 'பொருட்களைத் தேடு...', saveToWishlist: 'விருப்பப்பட்டியலில் சேமி', confirmOrder: 'வாங்குதலை உறுதிப்படுத்து', stock: 'கிடைக்கும் பங்கு', orderStatus: { confirmed: 'உறுதி செய்யப்பட்டது', cancelled: 'ரத்து செய்யப்பட்டது', dispatched: 'அனுப்பப்பட்டது', current: 'நடப்பு' } },
+    Hindi: { home: 'होम', profile: 'प्रोफाइल', orders: 'ऑर्डर', wishlist: 'विशलिस्ट', address: 'पता', payment: 'भुगतान के तरीके', logout: 'लॉगआउट', addToCart: 'कार्ट में जोड़ें', placeOrder: 'ऑर्डर करें', search: 'उत्पाद खोजें...', saveToWishlist: 'विशलिस्ट में सहेजें', confirmOrder: 'खरीद की पुष्टि करें', stock: 'उपलब्ध स्टॉक', orderStatus: { confirmed: 'पुष्टि की गई', cancelled: 'रद्द की गई', dispatched: 'प्रेषित', current: 'वर्तमान' } },
   };
 
   // Fetch data from Firebase
@@ -88,7 +88,7 @@ const CustomerDashboard = () => {
               tamilName: product.tamilName || product.name,
               hindiName: product.hindiName || product.name,
               price: parseFloat(product.price) || 0,
-              quantity: product.quantity || 0,
+              stock: parseInt(product.availableStock) || 0, // Fetch from availableStock
               category: product.category || 'Uncategorized',
               image: product.image || 'https://via.placeholder.com/150',
               farmerName: product.farmerName || 'Unknown Farmer',
@@ -225,14 +225,28 @@ const CustomerDashboard = () => {
 
   const addToCart = (product, qty = 1) => {
     const uid = auth.currentUser?.uid;
-    console.log("Adding to cart. UID:", uid, "Product:", product.name);
     if (!uid) {
       toast.error("Please log in to add items to cart.");
       return;
     }
 
+    // Check total quantity across all cart items for this product
+    const existingCartItem = cart.find((item) => item.id === product.id && item.farmerId === product.farmerId);
+    const totalQty = (existingCartItem ? existingCartItem.qty : 0) + qty;
+    const availableStock = product.stock;
+
+    if (totalQty > availableStock) {
+      toast.warn(`Total quantity (${totalQty}) exceeds available stock (${availableStock} kg) for ${product.name}!`);
+      return;
+    }
+
+    if (qty > availableStock) {
+      toast.warn(`Only ${availableStock} units available in stock!`);
+      return;
+    }
+
     const cartRef = ref(db, `customerDetails/${uid}/cart`);
-    const newCartItemRef = push(cartRef); // Generate a unique push ID
+    const newCartItemRef = push(cartRef);
     const cartItem = { ...product, qty, cartId: newCartItemRef.key };
     set(newCartItemRef, cartItem)
       .then(() => toast.success(`${product.name} added to cart!`))
@@ -243,8 +257,26 @@ const CustomerDashboard = () => {
     const uid = auth.currentUser?.uid;
     if (!uid) return;
 
+    const cartItem = cart.find((item) => item.cartId === cartId);
+    if (!cartItem) return;
+
+    // Check total quantity across all cart items for this product
+    const otherItems = cart.filter((item) => item.cartId !== cartId && item.id === cartItem.id && item.farmerId === cartItem.farmerId);
+    const totalQty = otherItems.reduce((sum, item) => sum + item.qty, 0) + qty;
+    const availableStock = cartItem.stock;
+
+    if (totalQty > availableStock) {
+      toast.warn(`Total quantity (${totalQty}) exceeds available stock (${availableStock} kg) for ${cartItem.name}!`);
+      return;
+    }
+
+    if (qty < 1) {
+      removeCartItem(cartId);
+      return;
+    }
+
     const cartRef = ref(db, `customerDetails/${uid}/cart/${cartId}`);
-    update(cartRef, { qty: Math.max(1, qty) })
+    update(cartRef, { qty })
       .catch((error) => toast.error('Failed to update cart: ' + error.message));
   };
 
@@ -351,6 +383,15 @@ const CustomerDashboard = () => {
       return;
     }
 
+    // Check total stock availability across all items in cart
+    for (const item of cart) {
+      const product = products.find((p) => p.id === item.id && p.farmerId === item.farmerId);
+      if (!product || item.qty > product.stock) {
+        toast.warn(`Insufficient stock for ${item.name}. Only ${product?.stock || 0} units available.`);
+        return;
+      }
+    }
+
     const orderId = Date.now();
     const orderDate = new Date().toISOString();
     const ordersRef = ref(db, `orders/order_${uid}_${orderId}`);
@@ -385,24 +426,41 @@ const CustomerDashboard = () => {
         type: selectedAddress.type,
         details: selectedAddress.details,
       },
-      status: 'Success', // Changed from 'Pending' to 'Success'
+      status: 'Confirmed', // Initial status
     };
 
-    set(ordersRef, order)
+    // Update stock in Firebase
+    const stockUpdates = cart.map((item) => {
+      const productRef = ref(db, `products/${item.farmerId}/${item.id}`);
+      const newStock = item.stock - item.qty;
+      return update(productRef, { availableStock: newStock });
+    });
+
+    Promise.all([
+      set(ordersRef, order),
+      ...stockUpdates,
+      remove(ref(db, `customerDetails/${uid}/cart`)),
+    ])
       .then(() => {
-        const cartRef = ref(db, `customerDetails/${uid}/cart`);
-        return remove(cartRef); // Clear the cart in Firebase
-      })
-      .then(() => {
-        setCart([]); // Clear local cart state
-        setOrderDetails({ address: '', paymentMethod: '' }); // Reset order details
-        setCurrentPage('orders'); // Switch to orders page
-        toast.success('Order placed successfully!');
+        setCart([]);
+        setOrderDetails({ address: '', paymentMethod: '' });
+        setCurrentPage('orders');
+        toast.success('Order placed successfully! Stock updated.');
       })
       .catch((error) => {
         console.error('Error placing order:', error);
         toast.error('Failed to place order: ' + error.message);
       });
+  };
+
+  const updateOrderStatus = (orderId, newStatus) => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+
+    const orderRef = ref(db, `orders/${orderId}`);
+    update(orderRef, { status: newStatus })
+      .then(() => toast.success(`Order ${orderId} status updated to ${newStatus}.`))
+      .catch((error) => toast.error('Failed to update order status: ' + error.message));
   };
 
   const totalAmount = cart.reduce((sum, item) => sum + item.qty * item.price, 0);
@@ -422,6 +480,35 @@ const CustomerDashboard = () => {
   const ProductDetails = ({ product }) => {
     const [selectedImage, setSelectedImage] = useState(product.images[0]);
     const [quantity, setQuantity] = useState(1);
+    const [totalPrice, setTotalPrice] = useState(product.price);
+
+    // Update total price whenever quantity changes
+    useEffect(() => {
+      setTotalPrice(product.price * quantity);
+    }, [quantity, product.price]);
+
+    // Handle quantity input change
+    const handleQuantityChange = (e) => {
+      const value = parseInt(e.target.value) || 1;
+      if (value < 1) {
+        setQuantity(1);
+      } else if (value > product.stock) {
+        setQuantity(product.stock);
+        toast.warn(`Only ${product.stock} units available in stock!`);
+      } else {
+        setQuantity(value);
+      }
+    };
+
+    // Handle button quantity selection
+    const handleButtonQuantity = (kg) => {
+      if (kg > product.stock) {
+        toast.warn(`Only ${product.stock} units available in stock!`);
+        setQuantity(product.stock);
+      } else {
+        setQuantity(kg);
+      }
+    };
 
     return (
       <motion.div
@@ -447,8 +534,9 @@ const CustomerDashboard = () => {
           </div>
           <div className="flex-1">
             <h1 className="text-2xl font-bold text-gray-800 dark:text-teal-300">{language === 'English' ? product.name : language === 'Tamil' ? product.tamilName : product.hindiName}</h1>
-            <p className="text-xl text-teal-600 dark:text-teal-400 mt-2">₹{product.price.toFixed(2)}</p>
+            <p className="text-xl text-teal-600 dark:text-teal-400 mt-2">₹{totalPrice.toFixed(2)}</p>
             <p className="text-gray-600 dark:text-gray-400">Sold by: {product.farmerName} (ID: {product.farmerId})</p>
+            <p className="text-gray-600 dark:text-gray-400">{translations[language].stock}: {product.stock} kg</p>
             <div className="flex items-center mt-2">
               {[...Array(5)].map((_, i) => (
                 <FaStar key={i} className={i < Math.round(product.rating) ? 'text-yellow-400' : 'text-gray-300'} />
@@ -461,8 +549,9 @@ const CustomerDashboard = () => {
                 {[1, 2, 3].map((kg) => (
                   <button
                     key={kg}
-                    onClick={() => setQuantity(kg)}
+                    onClick={() => handleButtonQuantity(kg)}
                     className={`p-2 rounded-lg ${quantity === kg ? 'bg-teal-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'} hover:bg-teal-400 transition-colors`}
+                    disabled={kg > product.stock}
                   >
                     {kg} kg
                   </button>
@@ -470,8 +559,9 @@ const CustomerDashboard = () => {
                 <input
                   type="number"
                   min="1"
+                  max={product.stock}
                   value={quantity}
-                  onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                  onChange={handleQuantityChange}
                   className="w-16 p-2 rounded-lg border border-gray-300 dark:border-gray-600 text-center bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
                 />
               </div>
@@ -482,6 +572,7 @@ const CustomerDashboard = () => {
                 whileTap={{ scale: 0.95 }}
                 onClick={() => addToCart(product, quantity)}
                 className="p-3 bg-gradient-to-r from-teal-500 to-indigo-500 text-white rounded-lg shadow-lg"
+                disabled={product.stock === 0}
               >
                 {translations[language].addToCart}
               </motion.button>
@@ -558,6 +649,7 @@ const CustomerDashboard = () => {
                 <div>
                   <p className="text-gray-800 dark:text-teal-300 font-semibold">{item.name}</p>
                   <p className="text-gray-600 dark:text-gray-400">By: {item.farmerName}</p>
+                  <p className="text-gray-600 dark:text-gray-400">{translations[language].stock}: {item.stock} kg</p>
                 </div>
               </div>
               <p className="text-teal-600 dark:text-teal-400 font-medium">₹{(item.qty * item.price).toFixed(2)}</p>
@@ -602,6 +694,83 @@ const CustomerDashboard = () => {
       </div>
     </motion.div>
   );
+
+  const OrdersPage = () => {
+    const [selectedOrderStatus, setSelectedOrderStatus] = useState('current');
+
+    const filteredOrders = orders.filter((order) => {
+      switch (selectedOrderStatus) {
+        case 'confirmed': return order.status === 'Confirmed';
+        case 'cancelled': return order.status === 'Cancelled';
+        case 'dispatched': return order.status === 'Dispatched';
+        case 'current': return ['Confirmed', 'Dispatched'].includes(order.status);
+        default: return true;
+      }
+    });
+
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.7 }}
+        className="p-4 sm:p-6 md:p-8 rounded-2xl shadow-2xl bg-white dark:bg-gray-900 w-full max-w-4xl mx-auto"
+      >
+        <h2 className="text-2xl font-extrabold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-teal-500 dark:from-indigo-400 dark:to-teal-300">
+          {translations[language].orders}
+        </h2>
+        <div className="mb-4">
+          <select
+            value={selectedOrderStatus}
+            onChange={(e) => setSelectedOrderStatus(e.target.value)}
+            className="p-2 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 border border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-teal-400"
+          >
+            <option value="current">{translations[language].orderStatus.current}</option>
+            <option value="confirmed">{translations[language].orderStatus.confirmed}</option>
+            <option value="dispatched">{translations[language].orderStatus.dispatched}</option>
+            <option value="cancelled">{translations[language].orderStatus.cancelled}</option>
+          </select>
+        </div>
+        <div className="space-y-6">
+          {filteredOrders.length === 0 ? (
+            <p className="text-gray-600 dark:text-gray-400">No orders found.</p>
+          ) : (
+            filteredOrders.map((order) => (
+              <motion.div key={order.orderId} whileHover={{ scale: 1.05 }} className="p-4 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
+                <p className="text-gray-800 dark:text-teal-300 font-semibold">{order.products.map((p) => p.productName).join(', ')}</p>
+                <p className="text-gray-600 dark:text-gray-400">Total: ₹{order.totalAmount.toFixed(2)}</p>
+                <p className="text-gray-600 dark:text-gray-400">Status: {order.status}</p>
+                <p className="text-gray-600 dark:text-gray-400">Date: {new Date(order.orderDateTime).toLocaleString()}</p>
+                <p className="text-gray-600 dark:text-gray-400">Address: {order.address.type} - {order.address.details}</p>
+                <p className="text-gray-600 dark:text-gray-400">Payment: {order.paymentMethod.type} - {order.paymentMethod.value}</p>
+                {['Confirmed', 'Dispatched'].includes(order.status) && (
+                  <div className="mt-2 space-x-2">
+                    {order.status === 'Confirmed' && (
+                      <motion.button
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => updateOrderStatus(order.orderId, 'Dispatched')}
+                        className="p-2 bg-teal-500 text-white rounded-lg"
+                      >
+                        Mark as Dispatched
+                      </motion.button>
+                    )}
+                    <motion.button
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => updateOrderStatus(order.orderId, 'Cancelled')}
+                      className="p-2 bg-red-500 text-white rounded-lg"
+                    >
+                      Cancel Order
+                    </motion.button>
+                  </div>
+                )}
+              </motion.div>
+            ))
+          )}
+        </div>
+      </motion.div>
+    );
+  };
 
   const renderPage = () => {
     switch (currentPage) {
@@ -681,7 +850,7 @@ const CustomerDashboard = () => {
                       </h3>
                       <p className="text-sm text-gray-600 dark:text-gray-400">By: {product.farmerName}</p>
                       <p className="text-teal-600 dark:text-teal-400 font-medium">₹{product.price.toFixed(2)}</p>
-                      <p className="text-sm text-gray-500 dark:text-gray-500">Rating: {product.rating}/5</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-500">{translations[language].stock}: {product.stock} kg</p>
                     </div>
                   ))
               )}
@@ -728,34 +897,7 @@ const CustomerDashboard = () => {
           </motion.div>
         );
       case 'orders':
-        return (
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7 }}
-            className="p-4 sm:p-6 md:p-8 rounded-2xl shadow-2xl bg-white dark:bg-gray-900 w-full max-w-4xl mx-auto"
-          >
-            <h2 className="text-2xl font-extrabold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-teal-500 dark:from-indigo-400 dark:to-teal-300">
-              {translations[language].orders}
-            </h2>
-            <div className="space-y-6">
-              {orders.length === 0 ? (
-                <p className="text-gray-600 dark:text-gray-400">No orders yet.</p>
-              ) : (
-                orders.map((order) => (
-                  <motion.div key={order.orderId} whileHover={{ scale: 1.05 }} className="p-4 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
-                    <p className="text-gray-800 dark:text-teal-300 font-semibold">{order.products.map((p) => p.productName).join(', ')}</p>
-                    <p className="text-gray-600 dark:text-gray-400">Total: ₹{order.totalAmount.toFixed(2)}</p>
-                    <p className="text-gray-600 dark:text-gray-400">Status: {order.status}</p>
-                    <p className="text-gray-600 dark:text-gray-400">Date: {new Date(order.orderDateTime).toLocaleString()}</p>
-                    <p className="text-gray-600 dark:text-gray-400">Address: {order.address.type} - {order.address.details}</p>
-                    <p className="text-gray-600 dark:text-gray-400">Payment: {order.paymentMethod.type} - {order.paymentMethod.value}</p>
-                  </motion.div>
-                ))
-              )}
-            </div>
-          </motion.div>
-        );
+        return <OrdersPage />;
       case 'wishlist':
         return (
           <motion.div
@@ -885,24 +1027,25 @@ const CustomerDashboard = () => {
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7 }}
-            className="p-4 sm:p-6 md:p-8 rounded-2xl shadow-2xl bg-white dark:bg-gray-900 w-full max-w-4xl mx-auto"
+            className="p-4 sm:p-6 md:p-8 rounded-2xl shadow-2xl bg-gray-900 text-white w-full max-w-4xl mx-auto"
           >
             <h2 className="text-2xl font-extrabold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-teal-500 dark:from-indigo-400 dark:to-teal-300">
               Your Cart
             </h2>
             {cart.length === 0 ? (
-              <p className="text-gray-600 dark:text-gray-400">Your cart is empty.</p>
+              <p className="text-gray-400">Your cart is empty.</p>
             ) : (
               <>
                 {cart.map((item) => (
-                  <motion.div key={item.cartId} className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-xl shadow-lg mb-6">
+                  <motion.div key={item.cartId} className="flex items-center justify-between p-4 bg-gray-800 rounded-xl shadow-lg mb-6">
                     <div className="flex items-center space-x-4">
                       <img src={item.image} alt={item.name} className="w-16 h-16 rounded-md" />
                       <div>
-                        <p className="text-gray-800 dark:text-teal-300 font-semibold">
+                        <p className="text-teal-300 font-semibold">
                           {language === 'English' ? item.name : language === 'Tamil' ? item.tamilName : item.hindiName}
                         </p>
-                        <p className="text-gray-600 dark:text-gray-400">By: {item.farmerName}</p>
+                        <p className="text-gray-400">By: {item.farmerName}</p>
+                        <p className="text-gray-400">{translations[language].stock}: {item.stock} kg</p>
                       </div>
                     </div>
                     <div className="flex items-center space-x-4">
@@ -910,22 +1053,23 @@ const CustomerDashboard = () => {
                         type="number"
                         value={item.qty}
                         onChange={(e) => updateCartItem(item.cartId, parseInt(e.target.value) || 1)}
-                        className="w-16 p-2 rounded-lg border border-gray-300 dark:border-gray-600 text-center bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
+                        className="w-16 p-2 rounded-lg border border-gray-600 text-center bg-gray-700 text-white"
                         min="1"
+                        max={item.stock}
                       />
-                      <p className="text-teal-600 dark:text-teal-400 font-medium">₹{(item.qty * item.price).toFixed(2)}</p>
+                      <p className="text-teal-400 font-medium">₹{(item.qty * item.price).toFixed(2)}</p>
                       <button onClick={() => removeCartItem(item.cartId)} className="text-red-500 hover:text-red-700">
                         <FaTrash />
                       </button>
                     </div>
                   </motion.div>
                 ))}
-                <p className="text-2xl font-bold text-gray-800 dark:text-teal-300 text-right mt-6">Total: ₹{totalAmount.toFixed(2)}</p>
+                <p className="text-2xl font-bold text-teal-300 text-right mt-6">Total: ₹{totalAmount.toFixed(2)}</p>
                 <motion.button
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={placeOrder}
-                  className="mt-8 w-full sm:w-72 mx-auto block py-4 bg-gradient-to-r from-teal-500 to-indigo-500 text-white rounded-lg shadow-2xl"
+                  className="mt-8 w-full py-4 bg-gradient-to-r from-teal-500 to-indigo-500 text-white rounded-lg shadow-2xl"
                 >
                   {translations[language].placeOrder}
                 </motion.button>
